@@ -3,7 +3,7 @@ import { FolderSearch, HardDrive, LoaderCircle, Plus, RotateCw, X } from "lucide
 import { Hero } from "../components/Hero";
 import { cancelScan, startScan, useScan } from "../lib/scanStore";
 import { formatBytes, scanner, type DriveInfo } from "../lib/tauri";
-import { l, useI18n, type L } from "../i18n";
+import { l, useI18n, type L, type PageId } from "../i18n";
 import { FolderView } from "./space/FolderView";
 import { DupesView, HistoryView, OldFilesView } from "./space/ExtraViews";
 import { TopFilesView, TypesView } from "./space/OverviewViews";
@@ -21,7 +21,7 @@ const BAR_COLORS = ["#5A94F0", "#3FC79A", "#39B5E6", "#8C7CF0", "#F2A46B", "#9DA
 
 const sameRoot = (a: string | null, b: string | null) => !!a && !!b && a.replace(/\\+$/, "").toLowerCase() === b.replace(/\\+$/, "").toLowerCase();
 
-export function SpacePage() {
+export function SpacePage({ onNavigate }: { onNavigate?: (id: PageId) => void }) {
   const { t, tr, lang } = useI18n();
   const scan = useScan();
   const [drives, setDrives] = useState<DriveInfo[]>([]);
@@ -164,7 +164,7 @@ export function SpacePage() {
               )}
             </div>
 
-            {tab === "folders" && scan.summary && <FolderView key={scanKey} rootPath={scan.summary.rootPath} scanKey={scanKey} />}
+            {tab === "folders" && scan.summary && <FolderView key={scanKey} rootPath={scan.summary.rootPath} scanKey={scanKey} onNavigate={onNavigate} onShowTopFiles={() => setTab("top")} />}
             {tab === "types" && <TypesView scanKey={scanKey} />}
             {tab === "top" && <TopFilesView scanKey={scanKey} />}
             {tab === "old" && <OldFilesView scanKey={scanKey} />}

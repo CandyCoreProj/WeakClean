@@ -54,7 +54,7 @@ export default function App() {
         <Sidebar current={page} onNavigate={setPage} />
         <main ref={mainRef} className="scroll min-w-0 flex-1 overflow-y-auto">
           {page === "home" && <HomePage onNavigate={setPage} />}
-          {page === "space" && <SpacePage />}
+          {page === "space" && <SpacePage onNavigate={setPage} />}
           {page === "cleaner" && <CleanerPage onNavigate={setPage} />}
           {page === "boost" && <BoostPage onNavigate={setPage} />}
           {page === "safety" && <SafetyPage />}

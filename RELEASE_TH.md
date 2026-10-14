@@ -70,6 +70,16 @@ $env:WEAKCLEAN_PFX = "C:\path\to\cert.pfx"; $env:WEAKCLEAN_PFX_PASSWORD = "..." 
 
 ### ปล่อยเวอร์ชันใหม่ (ทุกครั้ง)
 
+**ทางลัด (แนะนำ):** เพิ่มเลขเวอร์ชันให้ตรงกัน 3 ที่ (ข้อ 1 ด้านล่าง) แล้วรันคำสั่งเดียว — สคริปต์จะทำข้อ 2–4 ให้ตามลำดับที่ถูกต้อง
+
+```powershell
+.\scripts\ship.ps1 -Notes "สิ่งที่เปลี่ยน"
+```
+
+ตรวจความพร้อมก่อน (branch main, `gh` ล็อกอินแล้ว, เลขเวอร์ชันตรงกัน, ยังไม่มี Release นี้) → commit + push โค้ด → build + เซ็น → `gh release create` → push `updates/latest.json`
+
+**ทำเองทีละขั้น:**
+
 1. เพิ่มเลขเวอร์ชันให้ตรงกันทั้ง 3 ที่: `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/package.json`
 2. build + เซ็น + สร้าง `latest.json`:
    ```powershell
