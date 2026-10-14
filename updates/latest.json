@@ -1,0 +1,11 @@
+{
+  "version": "0.1.1",
+  "notes": "เพิ่มระบบตรวจหาอัปเดตในหน้าตั้งค่า, หน้าตั้งค่า และค้นหา Ctrl+K",
+  "pub_date": "2026-10-14T16:01:07Z",
+  "platforms": {
+    "windows-x86_64": {
+      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRSDJCZ29nVkM3cnptMkIzbU5KR0RFdXB0RzBtL0VtVWNSSVhHeW4zS1RpREp3RGlqREJDTUtEOTlyUk84eU9iZUNIU0VKelFFU05xeXNDb2pxeDBRWjA5WlhPWTBMYlFVPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTkzNjY2CWZpbGU6V2Vha0NsZWFuXzAuMS4xX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuMQozRE5rMlhSaXVxT1lyaGNObG1SeXdodjRLYkxENWVJdmU5Y0hEdWFlRUF3dXcrL1RRVlFGQnYvM1RiU0M5RExDaTQvSThRQTdaR2FkUVExVStxUTBEdz09Cg==",
+      "url": "https://github.com/CandyCoreProj/WeakClean/releases/download/v0.1.1/WeakClean_0.1.1_x64-setup.exe"
+    }
+  }
+}
