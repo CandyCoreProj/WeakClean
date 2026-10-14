@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { FolderOpen, Info, Monitor, Moon, ShieldCheck, Sun, Trash2 } from "lucide-react";
+import { Download, FolderOpen, Info, LoaderCircle, Monitor, Moon, RefreshCw, ShieldCheck, Sun, Trash2 } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { Dialog } from "../components/Dialog";
 import { Hero } from "../components/Hero";
 import { useToast } from "../components/Toast";
-import { getAppInfo, formatBytes, scanner, settings, type AppInfo, type Settings } from "../lib/tauri";
+import { getAppInfo, formatBytes, scanner, settings, updater, type AppInfo, type Settings, type UpdateInfo } from "../lib/tauri";
 import { l, useI18n, type L, type Lang } from "../i18n";
 import { useTheme, type ThemePref } from "../theme";
 
@@ -49,6 +49,32 @@ export function SettingsPage() {
   const [info, setInfo] = useState<AppInfo | null>(null);
   const [pendingDays, setPendingDays] = useState<number | null>(null);
   const [purgeOpen, setPurgeOpen] = useState(false);
+  const [upd, setUpd] = useState<
+    | { s: "idle" }
+    | { s: "checking" }
+    | { s: "latest" }
+    | { s: "available"; info: UpdateInfo }
+    | { s: "downloading"; info: UpdateInfo; done: number; total: number | null }
+    | { s: "error"; message: string }
+  >({ s: "idle" });
+
+  const checkForUpdate = async () => {
+    setUpd({ s: "checking" });
+    try {
+      const info = await updater.check();
+      setUpd(info ? { s: "available", info } : { s: "latest" });
+    } catch (e) {
+      setUpd({ s: "error", message: String(e) });
+    }
+  };
+  const installUpdate = async (info: UpdateInfo) => {
+    setUpd({ s: "downloading", info, done: 0, total: null });
+    try {
+      await updater.install((done, total) => setUpd({ s: "downloading", info, done, total }));
+    } catch (e) {
+      setUpd({ s: "error", message: String(e) });
+    }
+  };
 
   const load = useCallback(() => {
     void settings.get().then(setCfg).catch(() => {});
@@ -163,10 +189,10 @@ export function SettingsPage() {
               {tr(l("เปิดโฟลเดอร์", "Open folder"))}
             </button>
           </Row>
-          <Row title={tr(l("ไม่มีการส่งข้อมูลออกจากเครื่อง", "Nothing leaves your PC"))} text={tr(l("WeakClean ไม่เชื่อมต่ออินเทอร์เน็ตและไม่เก็บสถิติการใช้งาน — ประวัติและที่กักกันอยู่ในโฟลเดอร์ข้างบนเท่านั้น", "WeakClean makes no network connections and collects no usage data — history and quarantine live only in the folder above"))}>
+          <Row title={tr(l("ไม่มีการส่งข้อมูลของคุณออกจากเครื่อง", "Your data never leaves your PC"))} text={tr(l("WeakClean ไม่เก็บสถิติการใช้งานและไม่ส่งข้อมูลใดๆ — เชื่อมต่ออินเทอร์เน็ตเฉพาะตอนคุณกด \"ตรวจหาอัปเดต\" (เพื่อดาวน์โหลดไฟล์รายการอัปเดตจาก GitHub) ประวัติและที่กักกันอยู่ในโฟลเดอร์ข้างบนเท่านั้น", "WeakClean collects no usage data and sends nothing — it connects to the internet only when you press \"Check for updates\" (to download the update list from GitHub). History and quarantine live only in the folder above"))}>
             <Badge tone="safe">
               <ShieldCheck size={12} strokeWidth={2.4} aria-hidden="true" />
-              {tr(l("ออฟไลน์", "Offline"))}
+              {tr(l("ไม่ส่งข้อมูล", "No tracking"))}
             </Badge>
           </Row>
         </section>
@@ -181,8 +207,39 @@ export function SettingsPage() {
               <span className="text-sm text-muted">{f.value}</span>
             </Row>
           ))}
-          <Row title={tr(l("การอัปเดต", "Updates"))} text={tr(l("ยังไม่มีระบบอัปเดตอัตโนมัติ — เวอร์ชันใหม่จะแจกเป็นตัวติดตั้งใหม่จากผู้พัฒนา", "There is no automatic updater yet — new versions are distributed as new installers from the publisher"))}>
-            <span />
+          <Row
+            title={tr(l("การอัปเดต", "Updates"))}
+            text={
+              upd.s === "latest"
+                ? tr(l("คุณใช้เวอร์ชันล่าสุดแล้ว", "You're on the latest version"))
+                : upd.s === "available" || upd.s === "downloading"
+                  ? tr(l(`มีเวอร์ชันใหม่ ${upd.info.version}${upd.info.notes ? ` — ${upd.info.notes.slice(0, 200)}` : ""}`, `Version ${upd.info.version} is available${upd.info.notes ? ` — ${upd.info.notes.slice(0, 200)}` : ""}`))
+                  : upd.s === "error"
+                    ? tr(l(`ตรวจอัปเดตไม่สำเร็จ: ${upd.message}`, `Couldn't check for updates: ${upd.message}`))
+                    : tr(l("ตรวจเมื่อคุณกดเท่านั้น — แอปไม่ตรวจเองและไม่ติดตั้งอะไรโดยไม่ถามก่อน อัปเดตทุกชุดตรวจลายเซ็นก่อนติดตั้ง", "Checks only when you press the button — the app never checks by itself or installs anything without asking, and every update's signature is verified first"))
+            }
+          >
+            {upd.s === "available" ? (
+              <button type="button" onClick={() => void installUpdate(upd.info)} className="inline-flex min-h-11 items-center gap-2 rounded-full bg-primary px-[18px] text-sm font-semibold text-white shadow-primary transition hover:brightness-105">
+                <Download size={16} strokeWidth={2.2} aria-hidden="true" />
+                {tr(l("ดาวน์โหลดและติดตั้ง", "Download and install"))}
+              </button>
+            ) : upd.s === "downloading" ? (
+              <span role="status" className="inline-flex min-h-11 items-center gap-2 text-sm text-brand">
+                <LoaderCircle size={18} strokeWidth={2.2} className="animate-spin" aria-hidden="true" />
+                {upd.total ? `${Math.min(100, Math.round((upd.done / upd.total) * 100))}%` : formatBytes(upd.done)}
+              </span>
+            ) : (
+              <button
+                type="button"
+                disabled={upd.s === "checking"}
+                onClick={() => void checkForUpdate()}
+                className="inline-flex min-h-11 items-center gap-2 rounded-full border border-edge bg-surface px-[18px] text-sm transition-colors hover:bg-hover disabled:opacity-60"
+              >
+                <RefreshCw size={16} strokeWidth={2} className={upd.s === "checking" ? "animate-spin" : ""} aria-hidden="true" />
+                {tr(l("ตรวจหาอัปเดต", "Check for updates"))}
+              </button>
+            )}
           </Row>
         </section>
       </div>

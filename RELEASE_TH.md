@@ -60,23 +60,28 @@ $env:WEAKCLEAN_PFX = "C:\path\to\cert.pfx"; $env:WEAKCLEAN_PFX_PASSWORD = "..." 
 
 สคริปต์จะไม่ผ่านถ้าลายเซ็นไม่เป็น `Valid` (จึงกันการแจกไฟล์ที่เซ็นผิดโดยไม่รู้ตัว)
 
-## 3. Auto-update (ยังไม่ได้เปิดใช้ — ต้องตัดสินใจที่โฮสต์ก่อน)
+## 3. Auto-update (เปิดใช้แล้ว — โฮสต์ที่ GitHub: CandyCoreProj/WeakClean)
 
-ตั้งใจไม่ใส่ปลั๊กอินอัปเดตในแอปตอนนี้ เพราะต้องมี 2 อย่างที่เป็นของคุณ: **กุญแจเซ็นอัปเดต** (ไม่ใช่ตัวเดียวกับใบรับรองข้อ 2 และห้ามหาย — แอปที่แจกไปแล้วจะรับอัปเดตจากกุญแจอื่นไม่ได้) กับ **ที่เก็บไฟล์อัปเดต**
+แอปตรวจหาอัปเดต **เฉพาะตอนผู้ใช้กดปุ่ม "ตรวจหาอัปเดต" ในหน้าตั้งค่า** (ไม่ตรวจเองตอนเปิดแอป) แล้วถามก่อนติดตั้งทุกครั้ง
+แอปอ่าน `https://raw.githubusercontent.com/CandyCoreProj/WeakClean/main/updates/latest.json` และตรวจลายเซ็นของตัวติดตั้งด้วย public key ใน `tauri.conf.json` ก่อนติดตั้ง
 
-ขั้นตอนเมื่อพร้อม:
-1. สร้างกุญแจ (เก็บไฟล์ `.key` นอกโปรเจกต์ + รหัสผ่านในที่ปลอดภัย):
+**กุญแจเซ็นอัปเดต** (คนละตัวกับใบรับรอง CandyCore ข้อ 2): `%USERPROFILE%\.weakclean-signing\updater.key` — เก็บไฟล์และรหัสผ่านไว้ให้ดี
+ถ้าหายหรือเปลี่ยน แอปที่แจกไปแล้วจะรับอัปเดตต่อไปไม่ได้ (ต้องให้ผู้ใช้ติดตั้งใหม่ด้วยมือ)
+
+### ปล่อยเวอร์ชันใหม่ (ทุกครั้ง)
+
+1. เพิ่มเลขเวอร์ชันให้ตรงกันทั้ง 3 ที่: `apps/desktop/src-tauri/tauri.conf.json`, `apps/desktop/src-tauri/Cargo.toml`, `apps/desktop/package.json`
+2. build + เซ็น + สร้าง `latest.json`:
    ```powershell
-   cd apps\desktop; npx tauri signer generate -w $env:USERPROFILE\.weakclean-signing\updater.key
+   $env:WEAKCLEAN_CERT_THUMBPRINT = "BA09338D4D6B2B02C8CD7F745FAF194BC938FBCE"
+   .\scripts\release.ps1 -Sign -AllowSelfSigned -Notes "สิ่งที่เปลี่ยน"
    ```
-2. ติดตั้งปลั๊กอิน: `npm i @tauri-apps/plugin-updater` และ `cargo add tauri-plugin-updater` (ใน `src-tauri`), ใส่ `.plugin(tauri_plugin_updater::Builder::new().build())` ใน `lib.rs`, เพิ่มสิทธิ์ `updater:default` ใน `capabilities/default.json`
-3. ใส่ใน `tauri.conf.json`: `bundle.createUpdaterArtifacts: true` และ
-   ```json
-   "plugins": { "updater": { "pubkey": "<เนื้อหา updater.key.pub>", "endpoints": ["https://<ที่โฮสต์ของคุณ>/latest.json"] } }
-   ```
-4. ตอน build ตั้ง `TAURI_SIGNING_PRIVATE_KEY` (และ `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) จะได้ไฟล์ `.sig` ข้างตัวติดตั้ง
-5. อัปโหลดตัวติดตั้ง + `latest.json` (เวอร์ชัน, วันที่, URL, เนื้อหา `.sig`) ไปที่ endpoint — GitHub Releases ใช้ได้ฟรี
-6. ฝั่งหน้าจอ: เรียก `check()` จาก `@tauri-apps/plugin-updater` เมื่อผู้ใช้กด "ตรวจหาอัปเดต" ในหน้า ตั้งค่า (ปุ่มตั้งค่ายังไม่มีหน้า) และ**ถามผู้ใช้ก่อนติดตั้งทุกครั้ง**
+   (สคริปต์จะถามรหัสผ่านกุญแจอัปเดต หรือตั้ง `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` ไว้ก่อน)
+3. อัปโหลด Release: `gh release create v<เวอร์ชัน> release\<เวอร์ชัน>\* --repo CandyCoreProj/WeakClean --prerelease`
+4. **หลังอัปโหลด Release สำเร็จแล้ว** ค่อย commit + push `updates/latest.json` (ถ้า push ก่อน แอปจะเห็นเวอร์ชันใหม่ที่ดาวน์โหลดยังไม่ได้)
+5. ทดสอบ: เปิดแอปเวอร์ชันเก่า → ตั้งค่า → ตรวจหาอัปเดต
+
+ย้อนเวอร์ชันฉุกเฉิน: แก้ `updates/latest.json` ให้ชี้เวอร์ชันก่อนหน้าไม่ได้ (updater เทียบว่า "ใหม่กว่า" เท่านั้น) — ต้องออกเวอร์ชันที่เลขสูงขึ้นแทน
 
 ## 4. เช็กลิสต์ก่อนแจก
 

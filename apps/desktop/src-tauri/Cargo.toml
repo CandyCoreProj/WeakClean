@@ -1,6 +1,6 @@
 [package]
 name = "weakclean"
-version = "0.1.0"
+version = "0.1.1"
 description = "WeakClean — disk analyzer + PC optimizer"
 authors = ["ArmZ (CandyCore)"]
 edition = "2021"
@@ -21,6 +21,7 @@ weakclean-scanner = { path = "../../../crates/weakclean-scanner" }
 weakclean-cleaner = { path = "../../../crates/weakclean-cleaner" }
 weakclean-tweaks = { path = "../../../crates/weakclean-tweaks" }
 tauri-plugin-dialog = "2.8.2"
+tauri-plugin-updater = "2.13.3"
 
 # ทำให้ไฟล์ .exe ตอน release เล็กที่สุด
 [profile.release]

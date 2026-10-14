@@ -20,7 +20,10 @@ param(
   [switch]$AllowSelfSigned,
   [switch]$SkipTests,
   [switch]$SkipBuild,
-  [string]$TimestampUrl = "http://timestamp.digicert.com"
+  [string]$TimestampUrl = "http://timestamp.digicert.com",
+  # ข้อความที่แสดงในหน้าตั้งค่าตอนมีอัปเดต (เก็บใน latest.json)
+  [string]$Notes = "",
+  [string]$Repo = "CandyCoreProj/WeakClean"
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,6 +73,18 @@ if ($Sign) {
   Step "จะเซ็นผ่าน $helper (timestamp: $TimestampUrl)"
 }
 
+# ───────── 2.5) กุญแจเซ็นอัปเดต (แยกจากใบรับรอง Authenticode) ─────────
+# tauri.conf.json เปิด createUpdaterArtifacts จึงต้องมีกุญแจนี้ทุกครั้งที่ build — ไฟล์ .key อยู่นอกโปรเจกต์
+$updaterKey = if ($env:WEAKCLEAN_UPDATER_KEY) { $env:WEAKCLEAN_UPDATER_KEY } else { Join-Path $env:USERPROFILE ".weakclean-signing\updater.key" }
+if (-not $SkipBuild) {
+  if (-not (Test-Path $updaterKey)) { Fail "ไม่พบกุญแจเซ็นอัปเดต $updaterKey (ตั้ง WEAKCLEAN_UPDATER_KEY ถ้าเก็บไว้ที่อื่น)" }
+  $env:TAURI_SIGNING_PRIVATE_KEY = $updaterKey
+  if (-not $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD) {
+    $sec = Read-Host "รหัสผ่านของกุญแจเซ็นอัปเดต" -AsSecureString
+    $env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($sec))
+  }
+}
+
 # ───────── 3) build ─────────
 if (-not $SkipBuild) {
   Step "npm run tauri build"
@@ -111,6 +126,36 @@ if ($Sign -and $env:WEAKCLEAN_CERT_THUMBPRINT) {
   if ($c) { Export-Certificate -Cert $c -FilePath (Join-Path $out "CandyCore.cer") | Out-Null }
 }
 $sums | Set-Content (Join-Path $out "SHA256SUMS.txt") -Encoding ASCII
+
+# ไฟล์ลายเซ็นอัปเดต (.sig) + latest.json ที่แอปอ่านเพื่อตรวจหาเวอร์ชันใหม่
+foreach ($f in $files) {
+  $sigFile = "$($f.FullName).sig"
+  if (Test-Path $sigFile) { Copy-Item $sigFile $out }
+}
+$nsisName = ($files | Where-Object { $_.Name -like "*-setup.exe" } | Select-Object -First 1).Name
+$nsisSig = Join-Path $out "$nsisName.sig"
+if ($nsisName -and (Test-Path $nsisSig)) {
+  $manifest = [ordered]@{
+    version   = $version
+    notes     = $Notes
+    pub_date  = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+    platforms = [ordered]@{
+      "windows-x86_64" = [ordered]@{
+        signature = (Get-Content $nsisSig -Raw).Trim()
+        url       = "https://github.com/$Repo/releases/download/v$version/$nsisName"
+      }
+    }
+  }
+  $json = $manifest | ConvertTo-Json -Depth 6
+  $utf8 = New-Object System.Text.UTF8Encoding($false)
+  [IO.File]::WriteAllText((Join-Path $out "latest.json"), $json, $utf8)
+  # แอปอ่านไฟล์นี้จาก branch main — commit + push หลังอัปโหลด Release แล้ว
+  New-Item -ItemType Directory -Force (Join-Path $root "updates") | Out-Null
+  [IO.File]::WriteAllText((Join-Path $root "updates\latest.json"), $json, $utf8)
+  Write-Host "  latest.json: v$version -> updates\latest.json (commit + push หลังอัปโหลด Release)"
+} else {
+  Write-Host "  (ไม่พบไฟล์ .sig ของตัวติดตั้ง — ข้ามการสร้าง latest.json)" -ForegroundColor Yellow
+}
 
 Step "เสร็จแล้ว: $out"
 if (-not $Sign) { Write-Host "  (ยังไม่ได้เซ็นโค้ด — Windows SmartScreen จะเตือนผู้ใช้ ดู RELEASE_TH.md)" -ForegroundColor Yellow }

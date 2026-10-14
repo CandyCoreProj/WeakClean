@@ -1,6 +1,7 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { check as checkUpdate, type Update } from "@tauri-apps/plugin-updater";
 import { mockScanner } from "./mockScanner";
 import { mockCleaner } from "./mockCleaner";
 import { mockBoost } from "./mockBoost";
@@ -261,3 +262,30 @@ const settingsMock: typeof settingsReal = {
   purgeQuarantine: async () => ({ files: 0, bytes: 0 }),
 };
 export const settings: typeof settingsReal = isTauri() ? settingsReal : settingsMock;
+
+/* ───────── อัปเดตอัตโนมัติ — ดึงจาก GitHub เฉพาะตอนผู้ใช้กด "ตรวจหาอัปเดต" ───────── */
+
+export type UpdateInfo = { version: string; notes: string; date: string | null };
+
+let pendingUpdate: Update | null = null;
+
+export const updater = {
+  /** ตรวจหาเวอร์ชันใหม่ — null = เป็นเวอร์ชันล่าสุดแล้ว (เชื่อมต่ออินเทอร์เน็ตเฉพาะตอนเรียกนี้) */
+  check: async (): Promise<UpdateInfo | null> => {
+    if (!isTauri()) return null;
+    pendingUpdate = await checkUpdate();
+    return pendingUpdate ? { version: pendingUpdate.version, notes: pendingUpdate.body ?? "", date: pendingUpdate.date ?? null } : null;
+  },
+  /** ดาวน์โหลด (ตรวจลายเซ็นอัปเดตให้อัตโนมัติ) แล้วติดตั้ง — บน Windows แอปจะปิดตัวเองระหว่างติดตั้ง */
+  install: async (onProgress: (downloaded: number, total: number | null) => void): Promise<void> => {
+    if (!pendingUpdate) throw new Error("no update checked yet");
+    let downloaded = 0;
+    let total: number | null = null;
+    await pendingUpdate.download((e) => {
+      if (e.event === "Started") total = e.data.contentLength ?? null;
+      else if (e.event === "Progress") downloaded += e.data.chunkLength;
+      onProgress(downloaded, total);
+    });
+    await pendingUpdate.install();
+  },
+};
