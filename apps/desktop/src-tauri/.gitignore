@@ -1,0 +1,3 @@
+# ไฟล์ที่ Rust/Tauri สร้างเอง ไม่ต้องเก็บใน git
+/target/
+/gen/schemas

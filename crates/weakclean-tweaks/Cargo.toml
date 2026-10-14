@@ -1,0 +1,16 @@
+[package]
+name = "weakclean-tweaks"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+toml = "1.1.8"
+weakclean-cleaner = { version = "0.1.0", path = "../weakclean-cleaner" }
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_System_Registry", "Win32_System_Services", "Win32_Security", "Win32_System_Threading"] }
+
+[dev-dependencies]
+tempfile = "3.27.0"

@@ -1,0 +1,183 @@
+@import "tailwindcss";
+
+/* ───────── Design tokens: ธีม Sky Glass (ดูค่าทั้งหมดใน WeClean_Plan.md หัวข้อ 9) ───────── */
+@theme static {
+  --font-sans: "Prompt", system-ui, sans-serif;
+  --font-display: "Mitr", "Prompt", sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, monospace;
+
+  --color-backdrop: #bde8f8;
+  --color-app: #f4f8fd;
+  --color-ink: #2b3a67;
+  --color-ink-soft: #4a587a;
+  --color-muted: #5e6c8c;
+  --color-line: #e6eef8;
+  --color-field: #f1f6fd;
+  --color-hover: #eef5fe;
+  --color-brand: #1a5ce0;
+  --color-brand-2: #1677d6;
+  --color-link: #1458d6;
+  --color-sky: #2bb7ee;
+  --color-mint: #3dd6a3;
+
+  --color-safe-bg: #ddf7ec;
+  --color-safe-fg: #0e7a52;
+  --color-warn-bg: #fff1d6;
+  --color-warn-fg: #8a5300;
+  --color-danger-bg: #ffe3e3;
+  --color-danger-fg: #b4232a;
+  --color-info-bg: #e8eef8;
+  --color-info-fg: #3a4870;
+
+  /* พื้นผิวและเส้นขอบ (ชุดสว่าง) — ชุดมืดอยู่ท้ายไฟล์ใน :root[data-theme="dark"] */
+  --color-surface: #ffffff;
+  --color-track: #eaf1fa;
+  --color-edge: #d6e4f5;
+  --color-edge-2: #c9dbf2;
+  --color-rowline: #eef3fa;
+  --color-sel: #eaf3ff;
+  --color-switch-off: #c9d5e6;
+  --color-ring-track: #e3eefb;
+  --color-warn-ink: #4f3000;
+  --color-danger-ink: #7a1a1f;
+  --color-danger-edge: #f6d3d3;
+  --color-danger-row: #fbe9e9;
+  --color-danger-btn: #f3b9b9;
+  --color-warn-edge: #e9cf9a;
+  --color-glass: rgba(255, 255, 255, 0.8);
+  --color-glass-edge: rgba(255, 255, 255, 0.95);
+
+  --radius-card: 26px;
+  --radius-tile: 18px;
+
+  --shadow-card: 0 10px 30px var(--shadow-tint-card, rgba(40, 100, 190, 0.08));
+  --shadow-glass: 0 12px 30px var(--shadow-tint-glass, rgba(30, 100, 200, 0.14));
+  --shadow-primary: 0 10px 22px rgba(26, 92, 224, 0.28);
+  --shadow-float: 0 10px 24px rgba(10, 50, 140, 0.25);
+}
+
+/* ───────── พื้นผิวที่ใช้ซ้ำ ───────── */
+@utility bg-hero {
+  background: linear-gradient(120deg, #1a5ce0 0%, #1e86f0 55%, #2bb7ee 100%);
+}
+@utility bg-primary {
+  background: linear-gradient(100deg, #1a5ce0, #1677d6);
+}
+@utility bg-blob-mint {
+  background: linear-gradient(160deg, #62e4b0, #34cdc6);
+}
+@utility bg-soft {
+  background: linear-gradient(140deg, var(--soft-a, #e4f0ff), var(--soft-b, #ddf8ef));
+}
+@utility bg-banner {
+  background: linear-gradient(110deg, var(--banner-a, #ddf7ec), var(--banner-b, #e1f3ff));
+}
+@utility bg-switch-on {
+  background: linear-gradient(90deg, #1a5ce0, #2bb7ee);
+}
+@utility bg-meter {
+  background: linear-gradient(90deg, #1a5ce0, #2bb7ee, #3dd6a3);
+}
+@utility glass {
+  background: var(--color-glass);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--color-glass-edge);
+  box-shadow: var(--shadow-glass);
+}
+@utility tile-blue {
+  background: linear-gradient(150deg, #3d8bf5, #3fcbe8);
+}
+@utility tile-mint {
+  background: linear-gradient(150deg, #34c9c4, #5be0a8);
+}
+@utility tile-violet {
+  background: linear-gradient(150deg, #6a7cf5, #4fa8f2);
+}
+@utility tile-warm {
+  background: linear-gradient(150deg, #ff8a8a, #f2a46b);
+}
+@utility tile-deep {
+  background: linear-gradient(150deg, #1a5ce0, #4f8bf5);
+}
+
+/* ───────── พื้นฐาน ───────── */
+html,
+body,
+#root {
+  height: 100%;
+}
+body {
+  margin: 0;
+  background: var(--color-app);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  /* แอปเดสก์ท็อป: ไม่ให้ลากคลุมข้อความทั่วหน้า */
+  user-select: none;
+  overflow: hidden;
+}
+input {
+  user-select: text;
+}
+:focus-visible {
+  outline: 3px solid #7cc4ff;
+  outline-offset: 2px;
+}
+.scroll::-webkit-scrollbar {
+  width: 10px;
+}
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--color-edge-2);
+  border-radius: 10px;
+}
+
+/* ───────── ธีมมืด ─────────
+ * ใส่ data-theme="dark" ที่ <html> (ดู src/theme.tsx: ตามระบบ Windows หรือผู้ใช้เลือกเอง)
+ * ตัวหนังสือ/พื้นผิวทั้งหมดใช้ token ข้างบน จึงเปลี่ยนที่นี่ที่เดียว */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-app: #0e1626;
+  --color-surface: #17223a;
+  --color-ink: #e4ebfa;
+  --color-ink-soft: #b8c4e0;
+  --color-muted: #96a4c6;
+  --color-line: #25324f;
+  --color-field: #1f2d4b;
+  --color-hover: #22314f;
+  --color-brand: #5b9bff;
+  --color-brand-2: #5b9bff;
+  --color-link: #7db0ff;
+
+  --color-safe-bg: #12372b;
+  --color-safe-fg: #5fe0ad;
+  --color-warn-bg: #3d2f10;
+  --color-warn-fg: #ffc36b;
+  --color-danger-bg: #3f1b20;
+  --color-danger-fg: #ff8a8f;
+  --color-info-bg: #22304d;
+  --color-info-fg: #b7c5e6;
+
+  --color-track: #26365a;
+  --color-edge: #2e3f63;
+  --color-edge-2: #34466c;
+  --color-rowline: #202d49;
+  --color-sel: #1d3158;
+  --color-switch-off: #44557d;
+  --color-ring-track: #2a3a5e;
+  --color-warn-ink: #ffe2b0;
+  --color-danger-ink: #ffc9cc;
+  --color-danger-edge: #5a2b31;
+  --color-danger-row: #3a2226;
+  --color-danger-btn: #7a3a40;
+  --color-warn-edge: #6a5522;
+  --color-glass: rgba(28, 40, 66, 0.78);
+  --color-glass-edge: rgba(255, 255, 255, 0.08);
+
+  --shadow-tint-card: rgba(0, 0, 0, 0.35);
+  --shadow-tint-glass: rgba(0, 0, 0, 0.4);
+  --soft-a: #1b2f55;
+  --soft-b: #14393a;
+  --banner-a: #123b30;
+  --banner-b: #14304f;
+}

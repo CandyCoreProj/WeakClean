@@ -1,0 +1,130 @@
+# แคตตาล็อกหมวดขยะ (WeClean_Plan.md หัวข้อ 4.2)
+#
+# - `paths` รองรับตัวแปร %ENV% และเครื่องหมาย * ? ในชื่อโฟลเดอร์/ไฟล์ (เทียบแบบไม่สนตัวพิมพ์)
+# - ลบเฉพาะ "ไฟล์ข้างใน" ไม่ลบตัวโฟลเดอร์ และไม่ตาม symlink/junction
+# - ทุกไฟล์ถูกย้ายเข้าที่กักกัน 7 วัน ไม่มีการลบถาวรทันที
+# - ยังไม่รวม: ถังขยะ ($Recycle.Bin) และ Windows.old/DISM — ต้องทำคู่กับสิทธิ์ผู้ดูแลใน Phase 5
+
+# ───────── ปลอดภัย ─────────
+
+[[category]]
+id = "temp"
+group = "safe"
+default_on = true
+name_th = "ไฟล์ชั่วคราวของผู้ใช้"
+name_en = "User temporary files"
+desc_th = "%TEMP% — ไฟล์ที่โปรแกรมสร้างไว้แล้วไม่ได้ลบ"
+desc_en = "%TEMP% — files programs created and never removed"
+paths = ['%TEMP%']
+
+[[category]]
+id = "wu"
+group = "safe"
+default_on = true
+requires_admin = true
+name_th = "แคช Windows Update"
+name_en = "Windows Update cache"
+desc_th = "ไฟล์อัปเดตที่ติดตั้งเสร็จแล้ว"
+desc_en = "Updates that are already installed"
+paths = ['%WINDIR%\SoftwareDistribution\Download']
+
+[[category]]
+id = "wintemp"
+group = "safe"
+default_on = true
+requires_admin = true
+name_th = "ไฟล์ชั่วคราวของ Windows"
+name_en = "Windows temporary files"
+desc_th = "C:\\Windows\\Temp"
+desc_en = "C:\\Windows\\Temp"
+paths = ['%WINDIR%\Temp']
+
+[[category]]
+id = "delivery"
+group = "safe"
+default_on = true
+requires_admin = true
+name_th = "Delivery Optimization"
+name_en = "Delivery Optimization"
+desc_th = "ไฟล์อัปเดตที่ใช้แชร์กับเครื่องอื่น"
+desc_en = "Update files shared with other PCs"
+paths = ['%WINDIR%\ServiceProfiles\NetworkService\AppData\Local\Microsoft\Windows\DeliveryOptimization\Cache']
+
+[[category]]
+id = "browser"
+group = "safe"
+default_on = true
+name_th = "แคชเบราว์เซอร์"
+name_en = "Browser cache"
+desc_th = "Chrome, Edge, Firefox — ไม่แตะรหัสผ่านและคุกกี้"
+desc_en = "Chrome, Edge, Firefox — passwords and cookies untouched"
+paths = [
+  '%LOCALAPPDATA%\Google\Chrome\User Data\*\Cache',
+  '%LOCALAPPDATA%\Google\Chrome\User Data\*\Code Cache',
+  '%LOCALAPPDATA%\Google\Chrome\User Data\*\GPUCache',
+  '%LOCALAPPDATA%\Microsoft\Edge\User Data\*\Cache',
+  '%LOCALAPPDATA%\Microsoft\Edge\User Data\*\Code Cache',
+  '%LOCALAPPDATA%\Microsoft\Edge\User Data\*\GPUCache',
+  '%LOCALAPPDATA%\Mozilla\Firefox\Profiles\*\cache2',
+]
+
+[[category]]
+id = "thumb"
+group = "safe"
+default_on = true
+name_th = "แคชรูปตัวอย่าง (Thumbnail)"
+name_en = "Thumbnail cache"
+desc_th = "Windows จะสร้างใหม่ให้อัตโนมัติ"
+desc_en = "Windows rebuilds it automatically"
+paths = [
+  '%LOCALAPPDATA%\Microsoft\Windows\Explorer\thumbcache_*.db',
+  '%LOCALAPPDATA%\Microsoft\Windows\Explorer\iconcache_*.db',
+]
+
+[[category]]
+id = "dumps"
+group = "safe"
+default_on = true
+name_th = "Crash dumps และรายงานข้อผิดพลาด"
+name_en = "Crash dumps and error reports"
+desc_th = "ไฟล์บันทึกตอนโปรแกรมค้าง"
+desc_en = "Logs written when a program hangs"
+paths = [
+  '%LOCALAPPDATA%\CrashDumps',
+  '%LOCALAPPDATA%\Microsoft\Windows\WER\ReportArchive',
+  '%LOCALAPPDATA%\Microsoft\Windows\WER\ReportQueue',
+  '%PROGRAMDATA%\Microsoft\Windows\WER\ReportArchive',
+  '%PROGRAMDATA%\Microsoft\Windows\WER\ReportQueue',
+  '%WINDIR%\Minidump',
+]
+
+[[category]]
+id = "shader"
+group = "safe"
+default_on = false
+name_th = "Shader cache (DirectX / NVIDIA / AMD)"
+name_en = "Shader cache (DirectX / NVIDIA / AMD)"
+desc_th = "เกมจะโหลดช้าลงนิดหน่อยเฉพาะครั้งแรกหลังล้าง"
+desc_en = "Games load a bit slower, only the first time after cleaning"
+paths = [
+  '%LOCALAPPDATA%\D3DSCache',
+  '%LOCALAPPDATA%\NVIDIA\DXCache',
+  '%LOCALAPPDATA%\NVIDIA\GLCache',
+  '%LOCALAPPDATA%\AMD\DxCache',
+  '%LOCALAPPDATA%\AMD\GLCache',
+]
+
+# ───────── ตรวจสอบก่อน ─────────
+
+[[category]]
+id = "installers"
+group = "check"
+default_on = false
+name_th = "ตัวติดตั้งเก่าใน Downloads"
+name_en = "Old installers in Downloads"
+desc_th = ".exe .msi .iso ที่เก่ากว่า 90 วัน (เฉพาะที่อยู่ตรงๆ ในโฟลเดอร์ Downloads)"
+desc_en = ".exe .msi .iso older than 90 days (only directly inside Downloads)"
+paths = ['%USERPROFILE%\Downloads']
+extensions = ["exe", "msi", "iso"]
+older_than_days = 90
+recursive = false

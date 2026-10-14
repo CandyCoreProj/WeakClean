@@ -1,0 +1,389 @@
+# แคตตาล็อก tweak v1 (WeClean_Plan.md หัวข้อ 4.3)
+#
+# หลักการ
+# - เขียนเป็นข้อมูล: engine อ่านแล้ว detect / apply / revert เอง ค่าเดิมถูกบันทึกก่อนเปลี่ยนทุกครั้ง
+# - risk: safe = ปลอดภัย · recommended = แนะนำสำหรับเกม · expert = ลดความปลอดภัย (ไม่รวมในโปรไฟล์ใด)
+# - profiles: balanced / gaming (กำหนดเอง = เลือกเองทั้งหมด)
+# - ที่ตั้งใจ "ไม่ทำ": ปิด UAC, ปิด Windows Update ถาวร, PowerShell Unrestricted,
+#   ปิด FontCache/ShellHWDetection/WpnService/tzautoupdate แบบเหมา, แนบ .exe ของบุคคลที่สาม
+# - ยังไม่มีใน v1 (ต้องใช้ powercfg/bcdedit/scheduled task): แผนพลังงาน, Timer Coalescing, จัดการโปรแกรมเปิดตอนบูต, GPU
+#
+# ชนิด op: registry (hive = HKCU | HKLM, kind = dword | sz) และ service (start = disabled | manual | auto)
+
+# ───────── ระบบ & หน้าตา ─────────
+
+[[tweak]]
+id = "transp"
+category = "sys"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "ปิดเอฟเฟกต์โปร่งใส (Mica / Acrylic)"
+name_en = "Turn off transparency effects (Mica / Acrylic)"
+desc_th = "ลดงาน GPU ในการวาดหน้าต่าง"
+desc_en = "Less GPU work to draw windows"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Software\Microsoft\Windows\CurrentVersion\Themes\Personalize'
+  name = "EnableTransparency"
+  kind = "dword"
+  value = 0
+
+[[tweak]]
+id = "visual"
+category = "sys"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "ลดเอฟเฟกต์ภาพ (คงฟอนต์ลื่นไว้)"
+name_en = "Reduce visual effects (keep smooth fonts)"
+desc_th = "ปิดแอนิเมชันย่อ/ขยายหน้าต่างและแถบงาน เมนูเปิดไวขึ้น"
+desc_en = "Turns off window and taskbar animations so menus open faster"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Control Panel\Desktop\WindowMetrics'
+  name = "MinAnimate"
+  kind = "sz"
+  value = "0"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+  name = "TaskbarAnimations"
+  kind = "dword"
+  value = 0
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Control Panel\Desktop'
+  name = "MenuShowDelay"
+  kind = "sz"
+  value = "0"
+
+[[tweak]]
+id = "widgets"
+category = "sys"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "ปิดปุ่ม Widgets บน Taskbar"
+name_en = "Turn off the Widgets button on the taskbar"
+desc_th = "ไม่ต้องโหลดข่าวอยู่เบื้องหลัง"
+desc_en = "No news loading in the background"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced'
+  name = "TaskbarDa"
+  kind = "dword"
+  value = 0
+
+[[tweak]]
+id = "endtask"
+category = "sys"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "เพิ่ม \"End task\" ในคลิกขวา Taskbar"
+name_en = "Add \"End task\" to the taskbar right-click menu"
+desc_th = "ปิดโปรแกรมค้างได้ทันทีโดยไม่ต้องเปิด Task Manager (Windows 11 23H2 ขึ้นไป)"
+desc_en = "Close a frozen app instantly without opening Task Manager (Windows 11 23H2+)"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings'
+  name = "TaskbarEndTask"
+  kind = "dword"
+  value = 1
+
+[[tweak]]
+id = "classic"
+category = "sys"
+risk = "safe"
+profiles = []
+name_th = "เมนูคลิกขวาแบบ Windows 10"
+name_en = "Windows 10 style right-click menu"
+desc_th = "ไม่ต้องกด \"Show more options\" อีก (มีผลหลังรีสตาร์ต Explorer หรือออกจากระบบ)"
+desc_en = "No more \"Show more options\" (takes effect after restarting Explorer or signing out)"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32'
+  name = ""
+  kind = "sz"
+  value = ""
+
+# ───────── เกม & Latency ─────────
+
+[[tweak]]
+id = "gamedvr"
+category = "game"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "ปิด Game DVR และ Game Bar capture"
+name_en = "Turn off Game DVR and Game Bar capture"
+desc_th = "ลดอาการกระตุกจากการอัดวิดีโอเบื้องหลัง"
+desc_en = "Less stutter from background recording"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'System\GameConfigStore'
+  name = "GameDVR_Enabled"
+  kind = "dword"
+  value = 0
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Software\Microsoft\Windows\CurrentVersion\GameDVR'
+  name = "AppCaptureEnabled"
+  kind = "dword"
+  value = 0
+
+[[tweak]]
+id = "prio"
+category = "game"
+risk = "recommended"
+profiles = ["gaming"]
+name_th = "ให้โปรแกรมที่เปิดอยู่ด้านหน้าได้ CPU ก่อน"
+name_en = "Give the foreground app CPU priority"
+desc_th = "Win32PrioritySeparation = 0x26"
+desc_en = "Win32PrioritySeparation = 0x26"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKLM"
+  path = 'SYSTEM\CurrentControlSet\Control\PriorityControl'
+  name = "Win32PrioritySeparation"
+  kind = "dword"
+  value = 38
+
+[[tweak]]
+id = "mouse"
+category = "game"
+risk = "safe"
+profiles = ["gaming"]
+name_th = "ปิด Enhance Pointer Precision"
+name_en = "Turn off Enhance Pointer Precision"
+desc_th = "เมาส์ขยับตรงตามมือ เหมาะกับเกมยิง (มีผลหลังออกจากระบบแล้วเข้าใหม่)"
+desc_en = "The pointer moves exactly as your hand does — great for shooters (takes effect after signing in again)"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Control Panel\Mouse'
+  name = "MouseSpeed"
+  kind = "sz"
+  value = "0"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Control Panel\Mouse'
+  name = "MouseThreshold1"
+  kind = "sz"
+  value = "0"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKCU"
+  path = 'Control Panel\Mouse'
+  name = "MouseThreshold2"
+  kind = "sz"
+  value = "0"
+
+# ───────── เครือข่าย & ความเป็นส่วนตัว ─────────
+
+[[tweak]]
+id = "net"
+category = "net"
+risk = "recommended"
+reboot = true
+profiles = ["gaming"]
+name_th = "ปิด Network Throttling"
+name_en = "Turn off Network Throttling"
+desc_th = "ลดการหน่วงเครือข่ายตอนเล่นเกมหรือดูวิดีโอ"
+desc_en = "Less network delay while gaming or streaming"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKLM"
+  path = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+  name = "NetworkThrottlingIndex"
+  kind = "dword"
+  value = 4294967295
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKLM"
+  path = 'SOFTWARE\Microsoft\Windows NT\CurrentVersion\Multimedia\SystemProfile'
+  name = "SystemResponsiveness"
+  kind = "dword"
+  value = 0
+
+[[tweak]]
+id = "tele"
+category = "net"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "ปิด Telemetry ของ Windows"
+name_en = "Turn off Windows telemetry"
+desc_th = "นโยบาย AllowTelemetry และบริการ DiagTrack, dmwappushservice"
+desc_en = "The AllowTelemetry policy plus the DiagTrack and dmwappushservice services"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKLM"
+  path = 'SOFTWARE\Policies\Microsoft\Windows\DataCollection'
+  name = "AllowTelemetry"
+  kind = "dword"
+  value = 0
+  [[tweak.ops]]
+  type = "service"
+  name = "DiagTrack"
+  start = "disabled"
+  stop = true
+  [[tweak.ops]]
+  type = "service"
+  name = "dmwappushservice"
+  start = "disabled"
+  stop = true
+
+# ───────── บริการเบื้องหลัง ─────────
+
+[[tweak]]
+id = "sysmain"
+category = "svc"
+risk = "recommended"
+profiles = ["gaming"]
+name_th = "ปิด SysMain (Superfetch)"
+name_en = "Turn off SysMain (Superfetch)"
+desc_th = "ลดงานดิสก์เบื้องหลัง — แนะนำเฉพาะเครื่องที่ใช้ SSD"
+desc_en = "Less background disk work — recommended for SSD machines only"
+  [[tweak.ops]]
+  type = "service"
+  name = "SysMain"
+  start = "disabled"
+  stop = true
+
+[[tweak]]
+id = "search"
+category = "svc"
+risk = "recommended"
+profiles = []
+name_th = "Windows Search เปิดเฉพาะตอนใช้"
+name_en = "Windows Search on demand only"
+desc_th = "ดิสก์ว่างขึ้น แต่ค้นหาไฟล์ใน Explorer จะช้าลง"
+desc_en = "Frees up the disk, but searching files in Explorer gets slower"
+  [[tweak.ops]]
+  type = "service"
+  name = "WSearch"
+  start = "manual"
+  stop = true
+
+[[tweak]]
+id = "hyperv"
+category = "svc"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "ปิดบริการ Hyper-V guest"
+name_en = "Turn off Hyper-V guest services"
+desc_th = "ไม่จำเป็นถ้าเครื่องนี้ไม่ใช่ Virtual Machine"
+desc_en = "Not needed unless this PC is a virtual machine"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmicheartbeat"
+  start = "disabled"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmicshutdown"
+  start = "disabled"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmickvpexchange"
+  start = "disabled"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmicrdv"
+  start = "disabled"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmicvss"
+  start = "disabled"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmicvmsession"
+  start = "disabled"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmictimesync"
+  start = "disabled"
+  [[tweak.ops]]
+  type = "service"
+  name = "vmicguestinterface"
+  start = "disabled"
+
+[[tweak]]
+id = "unused"
+category = "svc"
+risk = "safe"
+profiles = ["balanced", "gaming"]
+name_th = "ปิดบริการที่ไม่ได้ใช้"
+name_en = "Turn off unused services"
+desc_th = "Fax, Retail Demo, Downloaded Maps, Remote Registry"
+desc_en = "Fax, Retail Demo, Downloaded Maps, Remote Registry"
+  [[tweak.ops]]
+  type = "service"
+  name = "Fax"
+  start = "disabled"
+  stop = true
+  [[tweak.ops]]
+  type = "service"
+  name = "RetailDemo"
+  start = "disabled"
+  stop = true
+  [[tweak.ops]]
+  type = "service"
+  name = "MapsBroker"
+  start = "disabled"
+  stop = true
+  [[tweak.ops]]
+  type = "service"
+  name = "RemoteRegistry"
+  start = "disabled"
+  stop = true
+
+# ───────── โหมดผู้เชี่ยวชาญ (ไม่รวมในโปรไฟล์ใด) ─────────
+
+[[tweak]]
+id = "vbs"
+category = "expert"
+risk = "expert"
+reboot = true
+profiles = []
+name_th = "ปิด VBS / Memory Integrity (HVCI)"
+name_en = "Turn off VBS / Memory Integrity (HVCI)"
+desc_th = "เพิ่ม FPS ได้ในบางเกม แต่ลดการป้องกันมัลแวร์ระดับเคอร์เนล"
+desc_en = "Can raise FPS in some games, but weakens kernel-level malware protection"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKLM"
+  path = 'SYSTEM\CurrentControlSet\Control\DeviceGuard\Scenarios\HypervisorEnforcedCodeIntegrity'
+  name = "Enabled"
+  kind = "dword"
+  value = 0
+
+[[tweak]]
+id = "spectre"
+category = "expert"
+risk = "expert"
+reboot = true
+profiles = []
+name_th = "ปิดการป้องกัน Spectre / Meltdown"
+name_en = "Turn off Spectre / Meltdown protection"
+desc_th = "CPU เร็วขึ้นเล็กน้อย แต่เปิดช่องโหว่ระดับฮาร์ดแวร์"
+desc_en = "The CPU gets slightly faster, but hardware-level vulnerabilities are exposed"
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKLM"
+  path = 'SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
+  name = "FeatureSettingsOverride"
+  kind = "dword"
+  value = 3
+  [[tweak.ops]]
+  type = "registry"
+  hive = "HKLM"
+  path = 'SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
+  name = "FeatureSettingsOverrideMask"
+  kind = "dword"
+  value = 3

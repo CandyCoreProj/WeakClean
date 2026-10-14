@@ -1,0 +1,34 @@
+[package]
+name = "weakclean"
+version = "0.1.0"
+description = "WeakClean — disk analyzer + PC optimizer"
+authors = ["ArmZ (CandyCore)"]
+edition = "2021"
+
+[lib]
+# ชื่อ lib ต้องไม่ซ้ำกับชื่อ binary (ข้อกำหนดของ Tauri บน Windows)
+name = "weakclean_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+weakclean-scanner = { path = "../../../crates/weakclean-scanner" }
+weakclean-cleaner = { path = "../../../crates/weakclean-cleaner" }
+weakclean-tweaks = { path = "../../../crates/weakclean-tweaks" }
+tauri-plugin-dialog = "2.8.2"
+
+# ทำให้ไฟล์ .exe ตอน release เล็กที่สุด
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true
+
+[target."cfg(windows)".dependencies]
+windows-sys = { version = "0.61.2", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_System_SystemInformation"] }
