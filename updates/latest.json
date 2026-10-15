@@ -1,11 +1,11 @@
 {
-    "version":  "0.1.3",
-    "notes":  "เพิ่มตัวช่วยเบื้องหลัง: เปิดพร้อม Windows, ไอคอนในถาดระบบ และการ์ดเตือนล้างขยะทุก 7 วัน; หน้าพื้นที่ดิสก์มีเมนูคลิกขวาและกล่องยืนยันก่อนย้ายไฟล์เข้าที่กักกัน; ปรับหน้าประวัติ \u0026 กู้คืน และหน้าตั้งค่า (หมายเหตุ: รุ่นนี้เปลี่ยนกุญแจเซ็นอัปเดต ผู้ที่ใช้ v0.1.2 หรือเก่ากว่าต้องดาวน์โหลดตัวติดตั้ง -setup.exe มาติดตั้งทับเองหนึ่งครั้ง หลังจากนั้นอัปเดตอัตโนมัติจะใช้ได้ตามปกติ)",
-    "pub_date":  "2026-10-15T09:03:58Z",
+    "version":  "0.1.4",
+    "notes":  "แก้สีโหมดมืด: ข้อความแจ้งเตือน (toast) อ่านชัดขึ้น ปุ่มแดงและปุ่มขาวบนหัวหน้าจอมีคอนทราสต์ที่เหมาะสม; หน้าตั้งค่าแจ้งชัดเจนขึ้นเมื่อติดตั้งอัปเดตไม่สำเร็จ",
+    "pub_date":  "2026-10-15T09:15:41Z",
     "platforms":  {
                       "windows-x86_64":  {
-                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVTZpQ25VcW9NRWlJS3FYUjFnbVdkSHpZcEpFK1JwRDF6MitjOG5PL1FRcnpoVlc5QUZzNnhLRnhkd2FSTWZhUUkzb3MvNGVRR2ZnS1Z0OWhxWlFyWmkzMTFYVGwxV1FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMDU1MDM3CWZpbGU6V2Vha0NsZWFuXzAuMS4zX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuMwpPck5SdXZXS04vL1RIajBRN1lTaXJwZDBHMUJJamkxQlR4OTd5OEFDZkIzNUN1dGg2WWJQVStGdlM0YlQzTktCbGdYcU5kVDF4S25NV0VERVhSWDBEdz09Cg==",
-                                             "url":  "https://github.com/CandyCoreProj/WeakClean/releases/download/v0.1.3/WeakClean_0.1.3_x64-setup.exe"
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVTZpQ25VcW9NRXI1RFhCNFZ3OVAwMVJ5RlNIeGZGVjkrdEJuWHlmZVYwRDJNNDVvR1puTWM5enJka2dlWXpxQ3AvR0x6Rm93V2VkSC9HMWhFdEpsNlp4OXBUektHdHc4PQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMDU1NzQwCWZpbGU6V2Vha0NsZWFuXzAuMS40X3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuNAptSVVDb1hWVVRQN3hZTlU0bWFrTVdIYk5CZ1NMdUFveWNDaWg5U09TV3JKRkFPeWRFRjMzSzFnYzVaeUpoSHZ1SmtlcVdQdXRWa2VHVkEwcitUazREUT09Cg==",
+                                             "url":  "https://github.com/CandyCoreProj/WeakClean/releases/download/v0.1.4/WeakClean_0.1.4_x64-setup.exe"
                                          }
                   }
 }
