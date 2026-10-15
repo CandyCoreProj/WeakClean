@@ -1,11 +1,11 @@
 {
-  "version": "0.1.2",
-  "notes": "ปรับปรุงหน้าพื้นที่ดิสก์: treemap วางกระเบื้องไม่ล้นกรอบ ชื่อบนก้อนเล็กอ่านง่ายขึ้น และมีลูกศรบอกโฟลเดอร์ที่เปิดเข้าไปดูได้",
-  "pub_date": "2026-10-14T16:43:21Z",
-  "platforms": {
-    "windows-x86_64": {
-      "signature": "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVRSDJCZ29nVkM3cjh5QlRSdDYrQkZudjJvbytPc3FBeHBWUW9yVzh0OVdMUm4xNXMrelBISG51TTBET014UlVzUkRNSWN5QXlOdWU2d1ZtVEN3QVhhbUJmc2Z0KytFZ0FFPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkxOTk2MjAwCWZpbGU6V2Vha0NsZWFuXzAuMS4yX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuMgpTbkx6UjJsb3JiRkIxcmYxUnhWRFE1WWNSL1dVQTFXZC9WTnhnK1hZZHdkMEhPa09EbVY4cDZLMFRJdkZ1cjNLU29WVHVJbmwzUWU1eVZVbUJ4NHJCZz09Cg==",
-      "url": "https://github.com/CandyCoreProj/WeakClean/releases/download/v0.1.2/WeakClean_0.1.2_x64-setup.exe"
-    }
-  }
+    "version":  "0.1.3",
+    "notes":  "เพิ่มตัวช่วยเบื้องหลัง: เปิดพร้อม Windows, ไอคอนในถาดระบบ และการ์ดเตือนล้างขยะทุก 7 วัน; หน้าพื้นที่ดิสก์มีเมนูคลิกขวาและกล่องยืนยันก่อนย้ายไฟล์เข้าที่กักกัน; ปรับหน้าประวัติ \u0026 กู้คืน และหน้าตั้งค่า (หมายเหตุ: รุ่นนี้เปลี่ยนกุญแจเซ็นอัปเดต ผู้ที่ใช้ v0.1.2 หรือเก่ากว่าต้องดาวน์โหลดตัวติดตั้ง -setup.exe มาติดตั้งทับเองหนึ่งครั้ง หลังจากนั้นอัปเดตอัตโนมัติจะใช้ได้ตามปกติ)",
+    "pub_date":  "2026-10-15T09:03:58Z",
+    "platforms":  {
+                      "windows-x86_64":  {
+                                             "signature":  "dW50cnVzdGVkIGNvbW1lbnQ6IHNpZ25hdHVyZSBmcm9tIHRhdXJpIHNlY3JldCBrZXkKUlVUVTZpQ25VcW9NRWlJS3FYUjFnbVdkSHpZcEpFK1JwRDF6MitjOG5PL1FRcnpoVlc5QUZzNnhLRnhkd2FSTWZhUUkzb3MvNGVRR2ZnS1Z0OWhxWlFyWmkzMTFYVGwxV1FnPQp0cnVzdGVkIGNvbW1lbnQ6IHRpbWVzdGFtcDoxNzkyMDU1MDM3CWZpbGU6V2Vha0NsZWFuXzAuMS4zX3g2NC1zZXR1cC5leGUJdmVyc2lvbjowLjEuMwpPck5SdXZXS04vL1RIajBRN1lTaXJwZDBHMUJJamkxQlR4OTd5OEFDZkIzNUN1dGg2WWJQVStGdlM0YlQzTktCbGdYcU5kVDF4S25NV0VERVhSWDBEdz09Cg==",
+                                             "url":  "https://github.com/CandyCoreProj/WeakClean/releases/download/v0.1.3/WeakClean_0.1.3_x64-setup.exe"
+                                         }
+                  }
 }
