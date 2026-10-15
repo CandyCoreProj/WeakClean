@@ -43,7 +43,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFGQkI1MDgxMjgxOEQ4MDcKUldRSDJCZ29nVkM3cjJyOU1tTWpPeC9WOTRkdnRNWjh5RjJGS3YzSzBaT25zOVI5SW5WYzQ3aEEK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDEyMENBQTUyQTcyMEVBRDQKUldUVTZpQ25VcW9NRWlJQVhJUGtOdjRYUXZaSWpSOGdyQWMrNDRtTDFTZ01PMW41SkhSUjBhQSsK",
       "endpoints": [
         "https://raw.githubusercontent.com/CandyCoreProj/WeakClean/main/updates/latest.json"
       ],
