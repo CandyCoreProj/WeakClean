@@ -1,6 +1,6 @@
 [package]
 name = "weakclean"
-version = "0.1.2"
+version = "0.1.3"
 description = "WeakClean — disk analyzer + PC optimizer"
 authors = ["ArmZ (CandyCore)"]
 edition = "2021"
@@ -14,7 +14,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 weakclean-scanner = { path = "../../../crates/weakclean-scanner" }

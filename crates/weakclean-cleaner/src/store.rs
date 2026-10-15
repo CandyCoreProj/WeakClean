@@ -96,11 +96,17 @@ fn db_err(e: rusqlite::Error) -> io::Error {
     io::Error::other(e)
 }
 
-/// ย้ายไฟล์ (rename; ถ้าข้ามไดรฟ์ใช้คัดลอก+ลบ) — ล้มเหลวแล้วต้นทางต้องยังอยู่ครบ
+/// ย้ายไฟล์/โฟลเดอร์ (rename; ถ้าข้ามไดรฟ์ใช้คัดลอก+ลบ) — ล้มเหลวแล้วต้นทางต้องยังอยู่ครบ
+///
+/// โฟลเดอร์ที่ผู้ใช้ลบเองจากหน้า พื้นที่ดิสก์ จะถูกย้ายมาทั้งก้อนด้วยฟังก์ชันนี้ —
+/// ไดรฟ์เดียวกันคือเปลี่ยนชื่อโฟลเดอร์ ไม่กี่มิลลิวินาทีต่อให้ใหญ่หลายสิบ GB
 fn move_file(from: &Path, to: &Path) -> io::Result<()> {
     match fs::rename(from, to) {
         Ok(()) => Ok(()),
         Err(e) if e.raw_os_error() == Some(ERROR_NOT_SAME_DEVICE) => {
+            if from.is_dir() {
+                return move_dir_across_volumes(from, to);
+            }
             fs::copy(from, to)?;
             if let Err(e) = fs::remove_file(from) {
                 // ลบต้นทางไม่ได้ (ถูกล็อก) → เอาสำเนาออก ถือว่าไม่ได้ย้าย
@@ -110,6 +116,55 @@ fn move_file(from: &Path, to: &Path) -> io::Result<()> {
             Ok(())
         }
         Err(e) => Err(e),
+    }
+}
+
+/// โฟลเดอร์ข้ามไดรฟ์: rename ใช้ไม่ได้ (ERROR_NOT_SAME_DEVICE) จึงคัดลอกทั้งต้นไม้แล้วลบต้นทาง
+/// ล้มเหลวกลางทาง = เก็บกวาดปลายทางทิ้ง ต้นทางไม่ถูกแตะ
+fn move_dir_across_volumes(from: &Path, to: &Path) -> io::Result<()> {
+    if let Err(e) = copy_tree(from, to) {
+        let _ = fs::remove_dir_all(to);
+        return Err(e);
+    }
+    if let Err(e) = fs::remove_dir_all(from) {
+        let _ = fs::remove_dir_all(to);
+        return Err(e);
+    }
+    Ok(())
+}
+
+/// คัดลอกทั้งโฟลเดอร์ลงไปข้างใน `to` (ไม่ตาม symlink/junction เหมือนตัวสแกน)
+fn copy_tree(from: &Path, to: &Path) -> io::Result<()> {
+    fs::create_dir_all(to)?;
+    for entry in fs::read_dir(from)? {
+        let entry = entry?;
+        let ft = entry.file_type()?;
+        if ft.is_symlink() {
+            continue;
+        }
+        let target = to.join(entry.file_name());
+        if ft.is_dir() {
+            copy_tree(&entry.path(), &target)?;
+        } else {
+            fs::copy(entry.path(), &target)?;
+        }
+    }
+    Ok(())
+}
+
+/// ลบของในที่กักกันทิ้งถาวร — ของที่ถูกย้ายมาอาจเป็นโฟลเดอร์ทั้งก้อน ไม่ใช่แค่ไฟล์
+fn remove_quarantined(stored: &str) -> io::Result<()> {
+    let path = Path::new(stored);
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(e) => {
+            if path.is_dir() {
+                fs::remove_dir_all(path)
+            } else {
+                Err(e)
+            }
+        }
     }
 }
 
@@ -328,10 +383,8 @@ impl Store {
                 rows.collect::<Result<_, _>>().map_err(db_err)?
             };
             for (stored, size) in held {
-                match fs::remove_file(&stored) {
-                    Ok(()) => {}
-                    Err(e) if e.kind() == io::ErrorKind::NotFound => {}
-                    Err(_) => continue,
+                if remove_quarantined(&stored).is_err() {
+                    continue;
                 }
                 files += 1;
                 bytes += size as u64;
@@ -453,6 +506,15 @@ impl Store {
         let conn = self.conn.lock().unwrap();
         conn.execute("DELETE FROM events WHERE id = ?1", params![id]).map_err(db_err)?;
         Ok(())
+    }
+
+    /// เวลาของการล้างขยะครั้งล่าสุด (วินาทีตั้งแต่ 1970) — None ถ้ายังไม่เคยล้างเลย
+    ///
+    /// ตัวช่วยเบื้องหลังใช้นับรอบเตือน โดยนับจาก "การล้างที่สำเร็จ" จริง ไม่ใช่ตอนเปิดโปรแกรม
+    /// (การปรับแต่งไม่นับ เพราะไม่เกี่ยวกับพื้นที่ที่คืนมา)
+    pub fn last_clean_ts(&self) -> Option<i64> {
+        let conn = self.conn.lock().unwrap();
+        conn.query_row("SELECT MAX(ts) FROM events WHERE kind = 'clean'", [], |r| r.get::<_, Option<i64>>(0)).ok().flatten()
     }
 
     /// รหัสของทุกชุดที่ยังกู้ได้ (ใหม่สุดก่อน) — ใช้กับปุ่ม "คืนค่าทุกอย่าง"

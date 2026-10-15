@@ -173,6 +173,34 @@ export const mockScanner = {
     mockEvents.unshift({ id, ts: Math.floor(Date.now() / 1000), kind: "clean", state: "active", heldFiles: paths.length, heldBytes: bytes, params: { files: paths.length, bytes, skippedFiles: 0, categories: [list === "old" ? "old_files" : "duplicates"] } });
     return { eventId: id, movedFiles: paths.length, movedBytes: bytes, skippedFiles: 0, skippedBytes: 0, categories: [] };
   },
+  removePaths: async (paths: string[]): Promise<CleanResult> => {
+    // ตัวอย่างในเบราว์เซอร์: ตัดโฟลเดอร์ออกจาก tree จำลองจริง เพื่อให้เห็นผลเหมือนในแอป
+    let movedBytes = 0;
+    let movedFiles = 0;
+    for (const p of paths) {
+      const parts = p.replace(/\\+$/, "").split("\\").filter(Boolean);
+      const rest = parts.slice(/^[a-z]:$/i.test(parts[0] ?? "") ? 1 : 0);
+      const name = rest[rest.length - 1]?.toLowerCase();
+      const chain: MNode[] = [TREE];
+      for (const part of rest.slice(0, -1)) {
+        const next = chain[chain.length - 1].kids?.find((k) => k.name.toLowerCase() === part.toLowerCase());
+        if (!next) break;
+        chain.push(next);
+      }
+      const parent = chain[chain.length - 1];
+      const i = parent.kids?.findIndex((k) => k.name.toLowerCase() === name) ?? -1;
+      if (!parent.kids || i < 0) continue;
+      const gone = parent.kids.splice(i, 1)[0];
+      for (const node of chain) node.size = Math.max(0, node.size - gone.size);
+      movedBytes += gone.size;
+      movedFiles += 1;
+    }
+    if (movedFiles === 0) return { eventId: null, movedFiles: 0, movedBytes: 0, skippedFiles: paths.length, skippedBytes: 0, categories: [] };
+    const bytes = Math.round(movedBytes);
+    const id = nextMockId();
+    mockEvents.unshift({ id, ts: Math.floor(Date.now() / 1000), kind: "clean", state: "active", heldFiles: movedFiles, heldBytes: bytes, params: { files: movedFiles, bytes, skippedFiles: 0, categories: ["disk_space"] } });
+    return { eventId: id, movedFiles, movedBytes: bytes, skippedFiles: 0, skippedBytes: 0, categories: [{ id: "disk_space", movedFiles, movedBytes: bytes, skippedFiles: 0, skippedBytes: 0 }] };
+  },
   history: async (_root: string): Promise<History> => {
     const now = Math.floor(Date.now() / 1000);
     return {

@@ -18,6 +18,9 @@ const CATS: (CleanCategory & { gb: number })[] = [
 
 /** ประวัติจำลอง — mockBoost เขียนรายการปรับแต่งลงที่นี่ด้วย */
 export const mockEvents: SafetyEvent[] = [];
+
+/** จำนวนวันที่กักกันในโหมดตัวอย่าง — settingsMock ใน tauri.ts ใช้ตัวเดียวกันนี้ */
+export const mockQuarantine = { retentionDays: 7 };
 export const mockChanges: TweakChange[] = [];
 export const nextMockId = (() => {
   let n = 1;
@@ -46,6 +49,9 @@ export const mockCleaner = {
     events.unshift({ id, ts: now(), kind: "clean", state: "active", heldFiles: movedFiles, heldBytes: movedBytes, params: { files: movedFiles, bytes: movedBytes, skippedFiles: 0, categories: ids } });
     return { eventId: id, movedFiles, movedBytes, skippedFiles: 0, skippedBytes: 0, categories };
   },
+  // โหมดตัวอย่างไม่มีการเปิดใหม่แบบผู้ดูแล จึงไม่มีอะไรค้างให้จำ
+  setPending: async (_ids: string[]) => {},
+  takePending: async (): Promise<string[]> => [],
   onProgress: async (cb: (p: CleanProgress) => void) => {
     onProgress = cb;
     return () => {
@@ -60,8 +66,8 @@ export const mockCleaner = {
       quarantine: {
         files: held.reduce((s, e) => s + e.heldFiles, 0),
         bytes: held.reduce((s, e) => s + e.heldBytes, 0),
-        nextExpiry: held.length ? Math.min(...held.map((e) => e.ts)) + 7 * 86400 : null,
-        retentionDays: 7,
+        nextExpiry: held.length ? Math.min(...held.map((e) => e.ts)) + mockQuarantine.retentionDays * 86400 : null,
+        retentionDays: mockQuarantine.retentionDays,
         lifetimeFreed: events.filter((e) => e.state !== "undone").reduce((s, e) => s + (e.params.bytes ?? 0), 0),
       },
     };

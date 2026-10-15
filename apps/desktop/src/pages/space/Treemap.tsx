@@ -20,6 +20,8 @@ type Props = {
   selected: string | null;
   onSelect: (id: string) => void;
   onOpen: (id: string) => void;
+  /** คลิกขวาที่กระเบื้อง — เปิดเมนูของแอปที่ตำแหน่งเคอร์เซอร์ */
+  onMenu?: (id: string, x: number, y: number) => void;
   label: string;
 };
 
@@ -27,7 +29,7 @@ const GAP = 4;
 const RADIUS = 16;
 
 /** Treemap แบบ squarified — คลิก = เลือก (ดูรายละเอียดด้านขวา), ดับเบิลคลิก = เปิดโฟลเดอร์ */
-export function Treemap({ items, selected, onSelect, onOpen, label }: Props) {
+export function Treemap({ items, selected, onSelect, onOpen, onMenu, label }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
 
@@ -83,6 +85,14 @@ export function Treemap({ items, selected, onSelect, onOpen, label }: Props) {
               aria-pressed={isSel}
               onClick={() => onSelect(item.id)}
               onDoubleClick={() => item.openable && onOpen(item.id)}
+              onContextMenu={
+                onMenu
+                  ? (ev) => {
+                      ev.preventDefault();
+                      onMenu(item.id, ev.clientX, ev.clientY);
+                    }
+                  : undefined
+              }
               title={`${item.title} · ${item.sub}`}
               style={{
                 left: x + GAP / 2,

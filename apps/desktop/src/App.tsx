@@ -8,6 +8,8 @@ import { BoostPage } from "./pages/BoostPage";
 import { SafetyPage } from "./pages/SafetyPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { CommandPalette } from "./components/CommandPalette";
+import { rescanCleaner } from "./lib/cleanerStore";
+import { background } from "./lib/tauri";
 import type { PageId } from "./i18n";
 import { PAGES } from "./pages";
 
@@ -35,6 +37,30 @@ export default function App() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // เมนูคลิกขวาของเบราว์เซอร์ (Back / Refresh / Save as / Print) ไม่เกี่ยวกับงานในแอปนี้เลย —
+  // ปิดทั้งแอปแล้วให้แต่ละหน้าเปิดเมนูของตัวเอง (ดู components/ContextMenu.tsx)
+  // ยกเว้นช่องกรอกข้อความ ที่ยังต้องใช้เมนู วาง/คัดลอก ของระบบ
+  useEffect(() => {
+    const onMenu = (ev: MouseEvent) => {
+      if (ev.target instanceof Element && ev.target.closest("input, textarea, [contenteditable='true']")) return;
+      ev.preventDefault();
+    };
+    document.addEventListener("contextmenu", onMenu);
+    return () => document.removeEventListener("contextmenu", onMenu);
+  }, []);
+
+  // การ์ดเตือน (หรือเมนูในถาดระบบ) สั่งให้พาไปหน้า ล้างขยะ แล้วสแกนหาขยะใหม่ให้เลย
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    void background
+      .onCleanRequested(() => {
+        setPage("cleaner");
+        void rescanCleaner();
+      })
+      .then((unlisten) => (off = unlisten));
+    return () => off?.();
   }, []);
 
   useEffect(() => {

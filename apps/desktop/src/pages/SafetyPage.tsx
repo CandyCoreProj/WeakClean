@@ -1,13 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
-import { Archive, ShieldCheck, Sparkles, TriangleAlert, Undo2, Zap, type LucideIcon } from "lucide-react";
+import { Archive, ShieldCheck, Sparkles, Trash2, TriangleAlert, Undo2, Zap, type LucideIcon } from "lucide-react";
 import { Badge } from "../components/Badge";
 import { Dialog } from "../components/Dialog";
 import { Hero } from "../components/Hero";
+import { Row } from "../components/Row";
+import { Segmented } from "../components/Segmented";
 import { useToast } from "../components/Toast";
 import { useCleaner } from "../lib/cleanerStore";
 import { failureText, refreshBoost, useBoost } from "../lib/boostStore";
-import { boost, cleaner, formatBytes, type RestoreResult, type RevertResult, type SafetyEvent, type SafetyOverview } from "../lib/tauri";
+import { boost, cleaner, formatBytes, settings, type RestoreResult, type RevertResult, type SafetyEvent, type SafetyOverview } from "../lib/tauri";
 import { l, useI18n } from "../i18n";
+
+const RETENTION_CHOICES = [3, 7, 14, 30, 90];
 
 const dayKey = (ts: number) => {
   const d = new Date(ts * 1000);
@@ -24,6 +28,8 @@ export function SafetyPage() {
   const [busy, setBusy] = useState<string | null>(null);
   const [confirmAll, setConfirmAll] = useState(false);
   const [driftDismissed, setDriftDismissed] = useState(false);
+  const [pendingDays, setPendingDays] = useState<number | null>(null);
+  const [purgeOpen, setPurgeOpen] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -43,6 +49,7 @@ export function SafetyPage() {
   const catName = (id: string) => {
     if (id === "old_files") return tr(l("ไฟล์เก่า", "Old files"));
     if (id === "duplicates") return tr(l("ไฟล์ซ้ำ", "Duplicate files"));
+    if (id === "disk_space") return tr(l("ลบเองจากพื้นที่ดิสก์", "Deleted from Disk space"));
     const c = cleanCatalog.find((x) => x.id === id);
     return c ? (lang === "th" ? c.nameTh : c.nameEn) : id;
   };
@@ -92,6 +99,29 @@ export function SafetyPage() {
     });
   };
 
+  const purgedText = (files: number, bytes: number) => tr(l(`ลบถาวรแล้ว ${num(files)} ไฟล์ (${formatBytes(bytes)})`, `Permanently deleted ${num(files)} files (${formatBytes(bytes)})`));
+  const changeRetention = async (days: number) => {
+    setPendingDays(null);
+    await run("ret", async () => {
+      const r = await settings.setRetention(days);
+      const set = tr(l(`ตั้งเป็น ${days} วันแล้ว`, `Set to ${days} days`));
+      return r.files > 0 ? `${set} · ${purgedText(r.files, r.bytes)}` : set;
+    });
+  };
+  const emptyQuarantine = async () => {
+    setPurgeOpen(false);
+    await run("purge", async () => {
+      const r = await settings.purgeQuarantine();
+      return purgedText(r.files, r.bytes);
+    });
+  };
+  // ลดจำนวนวัน = ของที่เก่ากว่าจะถูกลบถาวรทันที จึงถามก่อนถ้ามีอะไรอยู่ในที่กักกัน
+  const pickRetention = (days: number) => {
+    if (!q || days === q.retentionDays) return;
+    if (days < q.retentionDays && q.files > 0) setPendingDays(days);
+    else void changeRetention(days);
+  };
+
   const stats: { icon: LucideIcon; tile: string; label: string; value: string }[] = [
     { icon: Sparkles, tile: "tile-blue", label: tr(l("พื้นที่ที่ล้างไปแล้วทั้งหมด", "Total space cleaned so far")), value: formatBytes(q?.lifetimeFreed ?? 0) },
     {
@@ -120,7 +150,11 @@ export function SafetyPage() {
 
   const cleanSub = (e: SafetyEvent) => {
     const cats = (e.params.categories ?? []).length;
-    const base = tr(l(`${cats} หมวด · ${num(e.params.files ?? 0)} ไฟล์`, `${cats} categories · ${num(e.params.files ?? 0)} files`));
+    // ของที่ผู้ใช้ลบเองจากหน้า พื้นที่ดิสก์ นับเป็น "รายการ" (โฟลเดอร์ทั้งก้อนนับเป็น 1) ไม่ใช่หมวดขยะ
+    const space = (e.params.categories ?? []).includes("disk_space");
+    const base = space
+      ? tr(l(`${num(e.params.files ?? 0)} รายการ`, `${num(e.params.files ?? 0)} items`))
+      : tr(l(`${cats} หมวด · ${num(e.params.files ?? 0)} ไฟล์`, `${cats} categories · ${num(e.params.files ?? 0)} files`));
     switch (e.state) {
       case "active": {
         const left = Math.max(0, Math.ceil(((e.ts + (q?.retentionDays ?? 7) * 86_400) * 1000 - Date.now()) / 86_400_000));
@@ -245,7 +279,11 @@ export function SafetyPage() {
                       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                         <span className="flex items-center gap-2">
                           <span className="text-base font-medium">
-                            {isBoost ? boostTitle(e) : tr(l(`ล้างขยะ ${formatBytes(e.params.bytes ?? 0)}`, `Cleaned ${formatBytes(e.params.bytes ?? 0)} of junk`))}
+                            {isBoost
+                              ? boostTitle(e)
+                              : (e.params.categories ?? []).includes("disk_space")
+                                ? tr(l(`ลบ ${formatBytes(e.params.bytes ?? 0)} จากหน้า พื้นที่ดิสก์`, `Deleted ${formatBytes(e.params.bytes ?? 0)} from Disk space`))
+                                : tr(l(`ล้างขยะ ${formatBytes(e.params.bytes ?? 0)}`, `Cleaned ${formatBytes(e.params.bytes ?? 0)} of junk`))}
                           </span>
                           {e.state === "undone" && <Badge tone="info">{isBoost ? tr(l("ย้อนกลับแล้ว", "Undone")) : tr(l("กู้คืนแล้ว", "Restored"))}</Badge>}
                           {e.state === "expired" && <Badge tone="warn">{tr(l("หมดอายุ", "Expired"))}</Badge>}
@@ -308,6 +346,36 @@ export function SafetyPage() {
             </div>
           </section>
         ))}
+
+        {data && (
+          <section aria-labelledby="q-title" className="flex flex-col gap-2.5">
+            <h2 id="q-title" className="mt-1 mb-0 font-display text-base font-medium text-ink-soft">
+              {tr(l("ที่กักกัน", "Quarantine"))}
+            </h2>
+            <div className="flex flex-col overflow-hidden rounded-card bg-surface shadow-card">
+              <Row
+                title={tr(l("เก็บไฟล์ที่ล้างไว้กี่วัน", "How long to keep cleaned files"))}
+                text={tr(l("ไฟล์ที่ล้างหรือย้ายจะถูกเก็บไว้ก่อน กู้คืนได้ที่นี่ — พ้นกำหนดแล้วจึงลบถาวร", "Cleaned or moved files are kept first and can be restored here — they are permanently deleted after this time"))}
+              >
+                <Segmented value={q?.retentionDays ?? 7} options={RETENTION_CHOICES.map((d) => ({ id: d, label: tr(l(`${d} วัน`, `${d} d`)) }))} onPick={pickRetention} label={tr(l("จำนวนวันที่กักกัน", "Quarantine days"))} />
+              </Row>
+              <Row
+                title={tr(l("ตอนนี้ในที่กักกัน", "Currently in quarantine"))}
+                text={q ? tr(l(`${num(q.files)} ไฟล์ · ${formatBytes(q.bytes)}`, `${num(q.files)} files · ${formatBytes(q.bytes)}`)) : "…"}
+              >
+                <button
+                  type="button"
+                  disabled={!q || q.files === 0 || busy !== null}
+                  onClick={() => setPurgeOpen(true)}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-full border border-danger-btn bg-surface px-[18px] text-sm font-semibold text-danger-fg transition-colors hover:bg-danger-bg disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface"
+                >
+                  <Trash2 size={16} strokeWidth={2} aria-hidden="true" />
+                  {tr(l("ล้างที่กักกันตอนนี้", "Empty quarantine now"))}
+                </button>
+              </Row>
+            </div>
+          </section>
+        )}
       </div>
 
       <Dialog open={confirmAll} onClose={() => setConfirmAll(false)} labelledBy="undo-all-title">
@@ -323,6 +391,40 @@ export function SafetyPage() {
           </button>
           <button type="button" onClick={() => void undoAll()} className="min-h-[50px] rounded-full bg-danger-fg px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
             {tr(l("คืนค่าทั้งหมด", "Undo everything"))}
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={pendingDays !== null} onClose={() => setPendingDays(null)} labelledBy="ret-title">
+        <h2 id="ret-title" className="m-0 font-display text-2xl font-medium">
+          {tr(l(`ลดเหลือ ${pendingDays} วัน?`, `Reduce to ${pendingDays} days?`))}
+        </h2>
+        <p className="m-0 text-sm leading-relaxed text-info-fg">
+          {tr(l("ไฟล์ในที่กักกันที่เก่ากว่านี้จะถูก ลบถาวรทันที และกู้คืนไม่ได้อีก", "Quarantined files older than this will be permanently deleted right away and can no longer be restored")).replace(/\*\*/g, "")}
+        </p>
+        <div className="mt-1 flex justify-end gap-2.5">
+          <button type="button" onClick={() => setPendingDays(null)} className="min-h-[50px] rounded-full border border-edge bg-surface px-6 text-[15px] transition-colors hover:bg-hover">
+            {t.cancel}
+          </button>
+          <button type="button" onClick={() => pendingDays && void changeRetention(pendingDays)} className="min-h-[50px] rounded-full bg-danger-fg px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
+            {tr(l("ลดและลบส่วนที่เก่ากว่า", "Reduce and delete older files"))}
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={purgeOpen} onClose={() => setPurgeOpen(false)} labelledBy="purge-title">
+        <h2 id="purge-title" className="m-0 font-display text-2xl font-medium">
+          {tr(l("ล้างที่กักกันถาวร?", "Empty the quarantine permanently?"))}
+        </h2>
+        <p className="m-0 text-sm leading-relaxed text-info-fg">
+          {tr(l(`ไฟล์ทั้งหมด ${num(q?.files ?? 0)} ไฟล์ (${formatBytes(q?.bytes ?? 0)}) จะถูกลบถาวรและกู้คืนไม่ได้อีก — นี่เป็นการลบจริงเพียงอย่างเดียวของ WeakClean`, `All ${num(q?.files ?? 0)} files (${formatBytes(q?.bytes ?? 0)}) will be permanently deleted and can no longer be restored — this is the only real deletion WeakClean does`))}
+        </p>
+        <div className="mt-1 flex justify-end gap-2.5">
+          <button type="button" onClick={() => setPurgeOpen(false)} className="min-h-[50px] rounded-full border border-edge bg-surface px-6 text-[15px] transition-colors hover:bg-hover">
+            {t.cancel}
+          </button>
+          <button type="button" onClick={() => void emptyQuarantine()} className="min-h-[50px] rounded-full bg-danger-fg px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
+            {tr(l("ลบถาวร", "Delete permanently"))}
           </button>
         </div>
       </Dialog>

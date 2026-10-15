@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { background } from "./lib/tauri";
 
 export type Lang = "th" | "en";
 export type PageId = "home" | "space" | "cleaner" | "boost" | "safety" | "settings";
@@ -45,7 +46,7 @@ const th: Dict = {
     },
     boost: { nav: "เร่งความเร็ว", title: "เร่งความเร็ว", subtitle: "เลือกโปรไฟล์เดียวจบ หรือปรับเองทีละสวิตช์ — ทุกอย่างย้อนกลับได้" },
     safety: { nav: "ประวัติ & กู้คืน", title: "ประวัติ & กู้คืน", subtitle: "ทุกอย่างที่ WeakClean เคยทำอยู่ที่นี่ — ย้อนกลับได้ทีละรายการ" },
-    settings: { nav: "ตั้งค่า", title: "ตั้งค่า", subtitle: "ภาษา ธีม ที่กักกัน และข้อมูลของโปรแกรม" },
+    settings: { nav: "ตั้งค่า", title: "ตั้งค่า", subtitle: "ภาษา ธีม และข้อมูลของโปรแกรม" },
   },
 };
 
@@ -69,7 +70,7 @@ const en: Dict = {
     },
     boost: { nav: "Boost", title: "Boost", subtitle: "Pick one profile or tune each switch — everything is reversible" },
     safety: { nav: "History & Restore", title: "History & Restore", subtitle: "Everything WeakClean has done — undo any item" },
-    settings: { nav: "Settings", title: "Settings", subtitle: "Language, theme, quarantine and app data" },
+    settings: { nav: "Settings", title: "Settings", subtitle: "Language, theme and app data" },
   },
 };
 
@@ -97,6 +98,8 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     } catch {
       /* ไม่เป็นไร ใช้ค่าในหน่วยความจำต่อ */
     }
+    // เมนูในถาดระบบของตัวช่วยเบื้องหลังวาดฝั่ง Rust จึงต้องบอกให้มันเปลี่ยนตามภาษา
+    void background.setLang(lang);
   }, [lang]);
 
   const value = useMemo<I18nValue>(() => ({ lang, t: DICTS[lang], tr: (x) => x[lang], setLang }), [lang]);

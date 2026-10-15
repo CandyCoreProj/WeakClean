@@ -6,13 +6,15 @@ import { Hero } from "../components/Hero";
 import { ResultBanner } from "../components/ResultBanner";
 import { useToast } from "../components/Toast";
 import { rescanCleaner, useCleaner } from "../lib/cleanerStore";
-import { cleaner, formatBytes, type CleanCategory, type CleanResult, type Preview } from "../lib/tauri";
+import { useBoost } from "../lib/boostStore";
+import { boost, cleaner, formatBytes, type CleanCategory, type CleanResult, type Preview } from "../lib/tauri";
 import { l, useI18n, type PageId } from "../i18n";
 
 export function CleanerPage({ onNavigate }: { onNavigate: (id: PageId) => void }) {
   const { t, tr, lang } = useI18n();
   const toast = useToast();
   const { status, catalog, sizes } = useCleaner();
+  const elevated = useBoost().elevated;
   const [on, setOn] = useState<Record<string, boolean>>({});
   const seeded = useRef(false);
   const [confirm, setConfirm] = useState(false);
@@ -46,18 +48,45 @@ export function CleanerPage({ onNavigate }: { onNavigate: (id: PageId) => void }
   const toggle = (id: string) => setOn((prev) => ({ ...prev, [id]: !prev[id] }));
   const selectSafe = () => setOn(Object.fromEntries(catalog.map((c) => [c.id, c.group === "safe" && c.defaultOn && filesOf(c.id) > 0])));
 
-  const run = async () => {
+  /** หมวดที่เลือกและต้องสิทธิ์ผู้ดูแล (ถ้าเปิดแอปแบบผู้ใช้ปกติ ไฟล์กลุ่มนี้จะถูกลบไม่ได้) */
+  const adminPicked = picked.filter((c) => c.requiresAdmin);
+
+  const run = async (ids?: string[]) => {
     setConfirm(false);
     setResult(null);
     setCleaning({ bytes: 0 });
     try {
-      const r = await cleaner.clean(picked.map((c) => c.id));
+      const r = await cleaner.clean(ids ?? picked.map((c) => c.id));
       setResult(r);
     } catch (e) {
       toast(String(e));
     } finally {
       setCleaning(null);
       void rescanCleaner();
+    }
+  };
+
+  // เพิ่งเปิดใหม่แบบผู้ดูแลเพื่อล้างต่อ: รายการที่ผู้ใช้ยืนยันไว้แล้วถูกจำไว้ จึงล้างต่อให้เลย
+  useEffect(() => {
+    void cleaner
+      .takePending()
+      .then((ids) => {
+        if (ids.length > 0) void run(ids);
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /** กดล้างแล้วมีหมวดที่ต้องสิทธิ์ผู้ดูแล: จำรายการไว้ ขอสิทธิ์ครั้งเดียว (UAC) แล้วเปิดแอปใหม่เพื่อล้างต่อ */
+  const elevateAndClean = async () => {
+    setConfirm(false);
+    try {
+      await cleaner.setPending(picked.map((c) => c.id));
+      await boost.relaunchAdmin();
+    } catch {
+      // ผู้ใช้กด "ไม่" ในหน้าต่าง UAC: ทิ้งรายการที่จำไว้ ไม่ให้ไปล้างเองในรอบถัดไป
+      await cleaner.setPending([]);
+      toast(tr(l("ยกเลิกการขอสิทธิ์ผู้ดูแล", "Administrator permission was declined")));
     }
   };
 
@@ -256,12 +285,24 @@ export function CleanerPage({ onNavigate }: { onNavigate: (id: PageId) => void }
         <p className="m-0 text-sm leading-relaxed text-info-fg">
           {tr(l("ไฟล์จะถูก \"ย้าย\" ไปที่กักกันก่อน ไม่ได้ลบถาวร — กู้คืนได้ภายใน 7 วันที่หน้า ประวัติ & กู้คืน ไฟล์ที่กำลังถูกใช้งานจะถูกข้าม", "Files are \"moved\" to quarantine, not permanently deleted — restore them within 7 days from History & Restore. Files in use are skipped."))}
         </p>
+        {adminPicked.length > 0 && !elevated && (
+          <p className="m-0 rounded-2xl bg-warn-bg px-4 py-3 text-sm leading-relaxed text-warn-fg">
+            {tr(l(
+              `${adminPicked.length} หมวดที่เลือกต้องสิทธิ์ผู้ดูแล · กดปุ่มด้านล่างจะขึ้นหน้าต่าง Windows ขออนุญาตหนึ่งครั้ง แล้วเปิดโปรแกรมใหม่เพื่อล้างต่อทันที`,
+              `${adminPicked.length} selected categories need administrator rights · the button below asks Windows once, then reopens the app and continues cleaning automatically`,
+            ))}
+          </p>
+        )}
         <div className="mt-1 flex justify-end gap-2.5">
           <button type="button" onClick={() => setConfirm(false)} className="min-h-[50px] rounded-full border border-edge bg-surface px-6 text-[15px] transition-colors hover:bg-hover">
             {t.cancel}
           </button>
-          <button type="button" onClick={() => void run()} className="min-h-[50px] rounded-full bg-primary px-[26px] text-[15px] font-semibold text-white shadow-primary transition hover:brightness-105">
-            {tr(l("ยืนยันและล้าง", "Confirm and clean"))}
+          <button
+            type="button"
+            onClick={() => void (adminPicked.length > 0 && !elevated ? elevateAndClean() : run())}
+            className="min-h-[50px] rounded-full bg-primary px-[26px] text-[15px] font-semibold text-white shadow-primary transition hover:brightness-105"
+          >
+            {adminPicked.length > 0 && !elevated ? tr(l("ขอสิทธิ์แล้วล้างต่อ", "Allow and clean")) : tr(l("ยืนยันและล้าง", "Confirm and clean"))}
           </button>
         </div>
       </Dialog>

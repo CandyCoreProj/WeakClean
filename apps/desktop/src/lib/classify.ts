@@ -55,13 +55,23 @@ const GENERIC: Label = {
   kind: "info",
   canDelete: true,
   badge: l("ทั่วไป", "General"),
-  note: l("WeakClean ยังไม่รู้จักโฟลเดอร์นี้ — ถ้าลบ จะย้ายลงถังขยะให้ก่อนเสมอ เปลี่ยนใจกู้คืนได้", "WeakClean doesn't recognize this folder — if you delete it, it goes to the Recycle Bin first so you can restore it"),
+  note: l("WeakClean ยังไม่รู้จักโฟลเดอร์นี้ — ถ้าลบ จะย้ายเข้าที่กักกันให้ก่อนเสมอ เปลี่ยนใจกู้คืนได้", "WeakClean doesn't recognize this folder — if you delete it, it moves into quarantine first so you can restore it"),
 };
 
 /** ป้ายของ path เต็ม (เช่น C:\Users\ArmZ\Downloads) */
 export function classify(fullPath: string): Label {
   const p = fullPath.toLowerCase().replace(/\\+$/, "");
   return RULES.find(([re]) => re.test(p))?.[1] ?? GENERIC;
+}
+
+/**
+ * ลบเองได้ไหม (เมนูคลิกขวาในหน้า พื้นที่ดิสก์)
+ * ล็อกเฉพาะของที่ลบแล้วเครื่องพัง — โฟลเดอร์ระบบ (ป้าย "ห้ามลบ") และโฟลเดอร์ระดับโปรไฟล์/ProgramData
+ * ส่วนโฟลเดอร์โปรแกรม (ป้าย "ถอนการติดตั้งแทน") ลบได้ แต่กล่องยืนยันจะเตือนให้ถอนการติดตั้งแทน
+ */
+export function canDeleteHere(fullPath: string): boolean {
+  const label = classify(fullPath);
+  return label.kind !== "lock" && (label.canDelete || label.kind === "info");
 }
 
 /** ต่อ path เต็มจาก root + รายชื่อโฟลเดอร์ (root ของไดรฟ์ได้ "C:\\" เสมอ) */

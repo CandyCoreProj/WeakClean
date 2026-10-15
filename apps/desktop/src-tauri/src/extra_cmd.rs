@@ -1,7 +1,7 @@
 //! คำสั่งที่ต่อยอดจากผลสแกน: ไฟล์เก่า, ไฟล์ซ้ำ, ย้ายเข้าที่กักกัน และประวัติการเติบโตของพื้นที่
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -165,6 +165,148 @@ fn allowed_dupes<'a>(groups: &'a [DupGroup], selected: &[String]) -> Result<Hash
     Ok(map)
 }
 
+/* ───────── ลบเองจากหน้า พื้นที่ดิสก์ (คลิกขวา → ลบ) ───────── */
+
+/// ป้ายในประวัติของสิ่งที่ผู้ใช้ลบเองจากหน้า พื้นที่ดิสก์
+const CATEGORY_DISK_SPACE: &str = "disk_space";
+
+/// ย้ายโฟลเดอร์/ไฟล์ที่ผู้ใช้เลือกเองจากหน้า พื้นที่ดิสก์ เข้าที่กักกัน (กู้คืนได้ที่หน้า ประวัติ & กู้คืน)
+///
+/// ความปลอดภัย: path ต้องอยู่ใต้รากที่สแกนไว้จริง และต้องตรงกับสิ่งที่สแกนเจอ —
+/// โฟลเดอร์ต้องมีอยู่ใน tree ของผลสแกน ส่วนไฟล์ต้องมีขนาดเท่าที่จดไว้ตอนสแกน (หน้าจอส่ง path อะไรก็ได้มาลบไม่ได้)
+/// ของที่ย้ายไม่ได้ เช่น ถูกใช้งานอยู่ หรือไม่มีสิทธิ์ จะถูกข้ามและรายงานกลับไป ไม่ทำให้ทั้งชุดล้มเหลว
+#[tauri::command]
+pub async fn quarantine_scan_paths(scan: State<'_, ScanState>, cleaner: State<'_, CleanerState>, paths: Vec<String>) -> Result<CleanResult, String> {
+    let last = scan.last.lock().unwrap().clone().ok_or("no scan result yet")?;
+    let c = cleaner.inner().clone();
+    let targets = scan_targets(&last, &paths)?;
+    let tried: Vec<String> = targets.iter().map(|(p, _, _)| p.to_string_lossy().into_owned()).collect();
+
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        let mut items = Vec::new();
+        for (path, size, folder) in targets {
+            // ต้องยังเป็นของเดิมอยู่: โฟลเดอร์ที่ยังเป็นโฟลเดอร์ หรือไฟล์ที่ไม่ถูกแก้ขนาดหลังสแกน
+            let unchanged = std::fs::symlink_metadata(&path).is_ok_and(|md| {
+                if folder {
+                    md.is_dir()
+                } else {
+                    md.is_file() && md.len() == size
+                }
+            });
+            if unchanged {
+                items.push((path, size));
+            }
+        }
+        c.store.quarantine_paths(CATEGORY_DISK_SPACE, items, &|_| {})
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    // ผลสแกนที่ค้างในหน่วยความจำต้องตรงกับดิสก์ — ของที่ถูกข้าม (ยังอยู่ที่เดิม) ยังอยู่ในรายการต่อ
+    let mut guard = scan.last.lock().unwrap();
+    if let Some(arc) = guard.as_mut() {
+        let r = Arc::make_mut(arc);
+        for p in &tried {
+            if !Path::new(p).exists() {
+                r.forget_path(p);
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// ตรวจ path ที่หน้าจอส่งมาเทียบกับผลสแกน แล้วคืน (path, ขนาด, เป็นโฟลเดอร์) ของรายการที่ลบได้
+fn scan_targets(last: &ScanResult, paths: &[String]) -> Result<Vec<(PathBuf, u64, bool)>, String> {
+    let root = last.root_path.trim_end_matches(['\\', '/']);
+    let files = scanned_files(last);
+    let mut picked: Vec<(PathBuf, u64, bool)> = Vec::new();
+
+    for raw in paths {
+        let p = raw.trim_end_matches(['\\', '/']);
+        let inside = p.len() > root.len() && p.get(..root.len()).is_some_and(|head| head.eq_ignore_ascii_case(root)) && p.as_bytes()[root.len()] == b'\\';
+        if !inside {
+            return Err(format!("not inside the scanned folder: {raw}"));
+        }
+        // ประกอบชื่อกลับขึ้นมาเองจากผลสแกน — path ที่มี . หรือ .. จึงผ่านเข้ามาไม่ได้
+        let names: Vec<String> = p
+            .get(root.len() + 1..)
+            .unwrap_or_default()
+            .split('\\')
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+            .collect();
+        if names.is_empty() || names.iter().any(|s| s == "." || s == "..") {
+            return Err(format!("not in the scan result: {raw}"));
+        }
+
+        let full = match scanned_folder(&last.root, &names) {
+            // ใช้ชื่อจริงตามที่สแกนเจอ (ตัวพิมพ์อาจต่างจากที่หน้าจอส่งมา)
+            Some((node, actual)) => {
+                picked.push((PathBuf::from(format!("{root}\\{}", actual.join("\\"))), node.size, true));
+                continue;
+            }
+            None => format!("{root}\\{}", names.join("\\")),
+        };
+        // ไฟล์ไม่ได้อยู่ใน tree — ต้องเป็นไฟล์ที่จดไว้ตอนสแกน และใช้ชื่อที่จดไว้
+        match files.get(&full.to_lowercase()) {
+            Some((size, path)) => picked.push((PathBuf::from(path), *size, false)),
+            None => return Err(format!("not in the scan result: {raw}")),
+        }
+    }
+
+    // เลือกทั้งโฟลเดอร์แม่และลูกพร้อมกันไม่ได้ — ย้ายแม่ทีเดียวก็พาลูกไปด้วย จึงเก็บไว้แค่แม่
+    let mut kept: Vec<(PathBuf, u64, bool)> = Vec::new();
+    for item in picked {
+        if kept.iter().any(|(p, _, _)| covers(p, &item.0)) {
+            continue;
+        }
+        kept.retain(|(p, _, _)| !covers(&item.0, p));
+        kept.push(item);
+    }
+    if kept.is_empty() {
+        return Err("nothing to delete".into());
+    }
+    Ok(kept)
+}
+
+/// ไล่ตาม tree เอาตัวโฟลเดอร์พร้อมชื่อจริงตามที่สแกนเจอ
+fn scanned_folder<'a>(root: &'a Node, names: &[String]) -> Option<(&'a Node, Vec<String>)> {
+    let mut node = root;
+    let mut actual = Vec::with_capacity(names.len());
+    for name in names {
+        let child = node.children.iter().find(|c| c.name.eq_ignore_ascii_case(name))?;
+        actual.push(child.name.clone());
+        node = child;
+    }
+    Some((node, actual))
+}
+
+/// path (ตัวพิมพ์เล็ก) → (ขนาด, path ตามที่สแกนเจอ) ของไฟล์ที่จดไว้ตอนสแกน:
+/// ไฟล์ใหญ่สุด · ไฟล์เก่า · ไฟล์ที่เข้าเกณฑ์หาไฟล์ซ้ำ
+fn scanned_files(last: &ScanResult) -> HashMap<String, (u64, String)> {
+    let mut map = HashMap::new();
+    let mut add = |path: &str, size: u64| {
+        map.insert(path.to_lowercase(), (size, path.to_string()));
+    };
+    for f in &last.top_files {
+        add(&f.path, f.size);
+    }
+    for f in &last.old_files {
+        add(&f.path, f.size);
+    }
+    for (size, path) in &last.big_files {
+        add(path, *size);
+    }
+    map
+}
+
+/// `child` อยู่ใต้ `parent` หรือเป็นตัวเดียวกัน
+fn covers(parent: &Path, child: &Path) -> bool {
+    let (a, b) = (parent.to_string_lossy().to_lowercase(), child.to_string_lossy().to_lowercase());
+    a == b || b.starts_with(&format!("{a}\\"))
+}
+
 /* ───────── ประวัติการสแกน / การเติบโตของพื้นที่ ───────── */
 
 fn ensure_table(conn: &weakclean_cleaner::rusqlite::Connection) -> weakclean_cleaner::rusqlite::Result<()> {
@@ -284,4 +426,75 @@ pub async fn scan_history(cleaner: State<'_, CleanerState>, root: String) -> Res
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use weakclean_scanner::FileEntry;
+
+    const FOLDER: &str = "C:\\Program Files\\Adobe";
+
+    /// ผลสแกนจำลอง: C:\Program Files\Adobe (50) · C:\Program Files\Steam (30) และไฟล์ C:\pagefile.sys (12)
+    fn tree() -> ScanResult {
+        let leaf = |name: &str, size: u64| Node { name: name.into(), size, ..Node::default() };
+        ScanResult {
+            root_path: "C:\\".into(),
+            root: Node {
+                name: "C:\\".into(),
+                size: 92,
+                children: vec![Node { name: "Program Files".into(), size: 80, children: vec![leaf("Adobe", 50), leaf("Steam", 30)], ..Node::default() }],
+                ..Node::default()
+            },
+            top_files: vec![FileEntry { path: "C:\\pagefile.sys".into(), size: 12, allocated: 12 }],
+            old_files: vec![],
+            big_files: vec![(12, "C:\\pagefile.sys".into())],
+            extensions: vec![],
+            cluster_size: 4096,
+            elapsed_ms: 0,
+            errors: 0,
+            hardlink_dupes: 0,
+            cancelled: false,
+        }
+    }
+
+    #[test]
+    fn scan_targets_accepts_scanned_folders_and_files() {
+        let t = scan_targets(&tree(), &[FOLDER.into(), "C:\\pagefile.sys".into()]).unwrap();
+        assert_eq!(t.len(), 2);
+        assert_eq!(t[0].0.to_string_lossy(), FOLDER);
+        assert_eq!((t[0].1, t[0].2), (50, true), "a folder carries the size the scan measured");
+        assert_eq!((t[1].1, t[1].2), (12, false), "a recorded file is deletable too");
+    }
+
+    #[test]
+    fn scan_targets_uses_the_names_from_the_scan_not_from_the_screen() {
+        let t = scan_targets(&tree(), &["c:\\program files\\adobe\\".into()]).unwrap();
+        assert_eq!(t[0].0.to_string_lossy(), FOLDER, "case and the trailing slash are normalised");
+    }
+
+    #[test]
+    fn scan_targets_refuses_anything_outside_the_scan_result() {
+        let t = tree();
+        for bad in [
+            "D:\\Secret",
+            "C:\\",
+            "C:\\Windows\\System32",
+            "C:\\Program Files\\..\\Windows",
+            "C:\\Program Files\\Adobe\\setup.exe",
+        ] {
+            assert!(scan_targets(&t, &[bad.to_string()]).is_err(), "{bad} must be refused");
+        }
+        assert!(scan_targets(&t, &[]).is_err(), "an empty list is refused");
+    }
+
+    #[test]
+    fn scan_targets_keeps_only_the_parent_when_a_folder_and_its_child_are_picked() {
+        for order in [[FOLDER, "C:\\Program Files"], ["C:\\Program Files", FOLDER]] {
+            let t = scan_targets(&tree(), &order.map(String::from)).unwrap();
+            assert_eq!(t.len(), 1, "picking a folder together with its child must collapse into one");
+            assert_eq!(t[0].0.to_string_lossy(), "C:\\Program Files", "the parent covers the child");
+            assert_eq!(t[0].1, 80, "and it carries the parent's own size");
+        }
+    }
 }

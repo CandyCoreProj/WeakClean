@@ -144,6 +144,31 @@ impl Node {
         }
         Some(cur)
     }
+
+    /// ลบโฟลเดอร์ลูกตามเส้นทาง แล้วคืนโฟลเดอร์ที่ถูกลบ (ยอดของทุกโฟลเดอร์แม่บนเส้นทางถูกหักออกให้แล้ว)
+    /// ใช้เมื่อผู้ใช้ลบโฟลเดอร์ออกจากเครื่องเองจากหน้า พื้นที่ดิสก์ — tree ที่ค้างในหน่วยความจำต้องตรงกับดิสก์
+    pub fn remove_descendant(&mut self, path: &[String]) -> Option<Node> {
+        let first = path.first()?;
+        let i = self.children.iter().position(|c| c.name.eq_ignore_ascii_case(first))?;
+        let removed = if path.len() == 1 {
+            self.children.remove(i)
+        } else {
+            let sub = self.children[i].remove_descendant(&path[1..])?;
+            let child = &mut self.children[i];
+            child.size = child.size.saturating_sub(sub.size);
+            child.allocated = child.allocated.saturating_sub(sub.allocated);
+            child.files = child.files.saturating_sub(sub.files);
+            child.dirs = child.dirs.saturating_sub(sub.dirs + 1);
+            sub
+        };
+        self.size = self.size.saturating_sub(removed.size);
+        self.allocated = self.allocated.saturating_sub(removed.allocated);
+        self.files = self.files.saturating_sub(removed.files);
+        self.dirs = self.dirs.saturating_sub(removed.dirs + 1);
+        self.cloud_size = self.cloud_size.saturating_sub(removed.cloud_size);
+        self.cloud_files = self.cloud_files.saturating_sub(removed.cloud_files);
+        Some(removed)
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -174,7 +199,7 @@ pub struct ExtStat {
     pub allocated: u64,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ScanResult {
     /// path ที่สแกน (ตัด `\\?\` ออกแล้ว)
     pub root_path: String,
@@ -193,6 +218,38 @@ pub struct ScanResult {
     /// hard link ซ้ำที่ไม่ถูกนับ
     pub hardlink_dupes: u64,
     pub cancelled: bool,
+}
+
+impl ScanResult {
+    /// ลืมสิ่งที่เพิ่งถูกลบออกจากเครื่องไปแล้ว (โฟลเดอร์ใน tree + ไฟล์ที่จดไว้ในรายการต่างๆ)
+    ///
+    /// ใช้หลังผู้ใช้ลบของเองจากหน้า พื้นที่ดิสก์ เพื่อให้ผลสแกนที่ค้างในหน่วยความจำตรงกับดิสก์
+    /// ยอดของทุกโฟลเดอร์แม่ถูกหักออกตามจริง คืน false ถ้า path ไม่อยู่ในผลสแกนนี้ (เช่น ราก หรือ path นอกขอบเขต)
+    pub fn forget_path(&mut self, path: &str) -> bool {
+        let root = self.root_path.trim_end_matches(['\\', '/']);
+        let gone = path.trim_end_matches(['\\', '/']);
+        let inside = gone.len() > root.len()
+            && gone.get(..root.len()).is_some_and(|head| head.eq_ignore_ascii_case(root))
+            && gone.as_bytes()[root.len()] == b'\\';
+        if !inside {
+            return false;
+        }
+        let Some(rest) = gone.get(root.len() + 1..) else { return false };
+        let names: Vec<String> = rest.split('\\').filter(|s| !s.is_empty()).map(str::to_string).collect();
+        let removed_folder = !names.is_empty() && self.root.remove_descendant(&names).is_some();
+
+        // ไฟล์ที่ถูกจดไว้ตอนสแกน (ไฟล์ใหญ่สุด / ไฟล์เก่า / ไฟล์ซ้ำ) — ทั้งตัวที่ลบเองและที่อยู่ใต้โฟลเดอร์ที่ลบ
+        let under = |p: &str| {
+            let p = p.trim_end_matches(['\\', '/']);
+            p.get(..gone.len()).is_some_and(|head| head.eq_ignore_ascii_case(gone)) && p.as_bytes().get(gone.len()) == Some(&b'\\')
+        };
+        let before = self.top_files.len() + self.old_files.len() + self.big_files.len();
+        self.top_files.retain(|f| !f.path.eq_ignore_ascii_case(gone) && !under(&f.path));
+        self.old_files.retain(|f| !f.path.eq_ignore_ascii_case(gone) && !under(&f.path));
+        self.big_files.retain(|(_, p)| !p.eq_ignore_ascii_case(gone) && !under(p));
+        let forgot_files = before != self.top_files.len() + self.old_files.len() + self.big_files.len();
+        removed_folder || forgot_files
+    }
 }
 
 struct Ctx<'a> {
@@ -544,6 +601,29 @@ mod tests {
         assert_eq!(r.root.find(&["a".into()]).unwrap().size, 6000);
         assert_eq!(r.root.find(&["B".into(), "c".into()]).unwrap().files, 1);
         assert!(r.root.find(&["nope".into()]).is_none());
+    }
+
+    #[test]
+    fn forgetting_a_deleted_folder_updates_the_totals() {
+        let t = tempfile::tempdir().unwrap();
+        write(&t.path().join("a/f1.bin"), 1000);
+        write(&t.path().join("b/c/f2.bin"), 4000);
+        write(&t.path().join("root.dat"), 10);
+        let mut r = run(t.path());
+        let whole = r.root.size;
+
+        let folder = t.path().join("b").to_string_lossy().into_owned();
+        assert!(r.forget_path(&folder), "a folder from this scan must be found");
+        assert_eq!(r.root.size, whole - 4000, "the parents shrink by exactly what left");
+        assert_eq!(r.root.dirs, 1, "b and c leave the folder count");
+        assert!(r.root.find(&["b".into()]).is_none());
+        assert!(r.top_files.iter().all(|f| !f.path.ends_with("f2.bin")), "files under it leave the top list too");
+
+        let file = t.path().join("root.dat").to_string_lossy().into_owned();
+        assert!(r.forget_path(&file), "a file deleted on its own is forgotten too");
+        assert!(r.top_files.iter().all(|f| !f.path.ends_with("root.dat")));
+        assert!(!r.forget_path(&r.root_path.clone()), "the scanned root itself can never be forgotten");
+        assert!(!r.forget_path("D:\\nope"));
     }
 
     #[test]

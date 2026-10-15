@@ -273,6 +273,37 @@ fn quarantine_paths_moves_only_the_given_files_and_is_restorable() {
 }
 
 #[test]
+fn quarantine_moves_a_whole_folder_and_puts_it_back() {
+    let e = env();
+    let folder = e.junk.join("BigProgram");
+    write(&folder.join("app.exe"), 500);
+    write(&folder.join("sub/lib.dll"), 1500);
+
+    let r = e.store.quarantine_paths("disk_space", vec![(folder.clone(), 2000)], &quiet).unwrap();
+    assert_eq!((r.moved_files, r.moved_bytes, r.skipped_files), (1, 2000, 0));
+    assert!(!folder.exists(), "the folder itself must leave the original place");
+
+    let back = e.store.restore(r.event_id.unwrap()).unwrap();
+    assert_eq!((back.restored_files, back.restored_bytes, back.failed), (1, 2000, 0));
+    assert_eq!(fs::metadata(folder.join("sub/lib.dll")).unwrap().len(), 1500);
+}
+
+#[test]
+fn purge_deletes_quarantined_folders_from_disk() {
+    let e = env();
+    let folder = e.junk.join("BigProgram");
+    write(&folder.join("app.exe"), 800);
+    let id = e.store.quarantine_paths("disk_space", vec![(folder.clone(), 800)], &quiet).unwrap().event_id.unwrap();
+
+    let stored = fs::read_dir(e.tmp.path().join("wc/quarantine").join(id.to_string())).unwrap().next().unwrap().unwrap().path();
+    assert!(stored.is_dir(), "a deleted folder is quarantined as a folder");
+
+    assert_eq!(e.store.purge_all().unwrap(), (1, 800));
+    assert!(!stored.exists(), "purging must remove the quarantined folder itself");
+    assert!(!folder.exists());
+}
+
+#[test]
 fn retention_setting_roundtrips_and_shorter_retention_purges_older_batches() {
     let e = env();
     assert_eq!(e.store.retention_days(), 7);
@@ -303,4 +334,22 @@ fn purge_all_empties_the_quarantine_permanently() {
     assert_eq!(e.store.quarantine_summary(7).unwrap().bytes, 0);
     assert!(e.store.restore(id).is_err(), "purged files can no longer be restored");
     assert!(!e.junk.join("a.tmp").exists());
+}
+
+#[test]
+fn last_clean_ts_counts_only_real_cleans() {
+    let e = env();
+    assert_eq!(e.store.last_clean_ts(), None, "ยังไม่เคยล้าง = ยังไม่มีรอบให้เริ่มนับ");
+
+    // ล้างตอนไม่มีไฟล์ = ไม่มีรายการในประวัติ จึงยังไม่เริ่มนับรอบ
+    e.store.clean(&[&def("c", &[&e.junk])], &quiet).unwrap();
+    assert_eq!(e.store.last_clean_ts(), None);
+
+    write(&e.junk.join("a.tmp"), 10);
+    e.store.clean(&[&def("c", &[&e.junk])], &quiet).unwrap();
+    let cleaned = e.store.last_clean_ts().expect("การล้างที่สำเร็จต้องถูกจดไว้");
+
+    // การปรับแต่งไม่ใช่การล้างขยะ จึงไม่รีเซ็ตรอบเตือน
+    e.store.add_event("boost", &serde_json::Value::Null).unwrap();
+    assert_eq!(e.store.last_clean_ts(), Some(cleaned));
 }

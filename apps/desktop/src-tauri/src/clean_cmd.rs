@@ -23,9 +23,14 @@ pub struct Cleaner {
 
 pub type CleanerState = Arc<Cleaner>;
 
+/// โฟลเดอร์ข้อมูลของ WeakClean (%LOCALAPPDATA%\WeakClean) — ที่เก็บฐานข้อมูล ที่กักกัน และไฟล์ล็อกกันเปิดซ้อน
+pub fn data_dir() -> PathBuf {
+    std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("WeakClean")
+}
+
 /// เปิดฐานข้อมูล/ที่กักกันที่ %LOCALAPPDATA%\WeakClean แล้วลบถาวรเฉพาะชุดที่หมดอายุ
 pub fn init() -> Result<CleanerState, String> {
-    let base = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_else(std::env::temp_dir).join("WeakClean");
+    let base = data_dir();
     let store = Arc::new(Store::open(&base).map_err(|e| format!("cannot open {}: {e}", base.display()))?);
     let cleaner = Arc::new(Cleaner { store, defs: builtin_catalog(), busy: AtomicBool::new(false) });
 
@@ -124,4 +129,61 @@ pub async fn safety_restore(state: State<'_, CleanerState>, event_id: i64) -> Re
     tauri::async_runtime::spawn_blocking(move || c.store.restore(event_id).map_err(|e| e.to_string()))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/* ───────── ขอสิทธิ์ผู้ดูแลครั้งเดียวแล้วล้างต่อ ───────── */
+
+/// คีย์จำหมวดที่จะล้างต่อ หลังเปิดแอปใหม่แบบผู้ดูแล (อยู่ไม่กี่วินาทีระหว่างปิด-เปิด)
+const PENDING_CLEAN: &str = "pending_clean";
+/// ยอมรับรายการค้างได้นานสุดกี่วินาที — นานกว่านี้ถือว่าไม่เกี่ยวกับการขอสิทธิ์รอบนั้นแล้ว
+const PENDING_CLEAN_MAX_AGE: i64 = 300;
+
+fn unix_now() -> i64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0)
+}
+
+/// จำหมวดที่ผู้ใช้ยืนยันไว้ ก่อนขอสิทธิ์ผู้ดูแล (UAC) แล้วเปิดแอปใหม่
+#[tauri::command]
+pub fn cleaner_pending_set(state: State<'_, CleanerState>, ids: Vec<String>) -> Result<(), String> {
+    let payload = format!("{}:{}", unix_now(), ids.join(","));
+    state.store.set_setting(PENDING_CLEAN, &payload).map_err(|e| e.to_string())
+}
+
+/// อ่านหมวดที่ค้างไว้แล้วลบทิ้งทันที — คืน [] ถ้าไม่มี หรือค้างนานเกิน 5 นาที (กันเผลอล้างเองภายหลัง)
+#[tauri::command]
+pub fn cleaner_pending_take(state: State<'_, CleanerState>) -> Vec<String> {
+    let Some(raw) = state.store.setting(PENDING_CLEAN) else { return Vec::new() };
+    let _ = state.store.set_setting(PENDING_CLEAN, "");
+    parse_pending(&raw, unix_now())
+}
+
+/// แยกรายการที่จำไว้รูปแบบ `ts:id1,id2` — หมดอายุแล้วคืน [] (ผู้ใช้อาจไม่เคยกดยืนยันในรอบนั้นจริง)
+fn parse_pending(raw: &str, now: i64) -> Vec<String> {
+    let Some((ts, ids)) = raw.split_once(':') else { return Vec::new() };
+    if now - ts.parse::<i64>().unwrap_or(0) > PENDING_CLEAN_MAX_AGE {
+        return Vec::new();
+    }
+    ids.split(',').filter(|s| !s.is_empty()).map(str::to_string).collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_pending;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn now() -> i64 {
+        SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64
+    }
+
+    #[test]
+    fn pending_clean_only_survives_a_fresh_relaunch() {
+        let t = now();
+        assert_eq!(parse_pending(&format!("{t}:temp,wu"), t), vec!["temp", "wu"]);
+        // ค้างนานเกิน 5 นาที = ไม่ใช่การขอสิทธิ์รอบนั้นแล้ว ต้องไม่ล้างเอง
+        assert!(parse_pending(&format!("{}:temp", t - 400), t).is_empty());
+        // ไม่มีรายการ / ค่าที่จำไว้ถูกล้างแล้ว
+        assert!(parse_pending(&format!("{t}:"), t).is_empty());
+        assert!(parse_pending("", t).is_empty());
+        assert!(parse_pending("garbage", t).is_empty());
+    }
 }

@@ -3,7 +3,7 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
 import { check as checkUpdate, type Update } from "@tauri-apps/plugin-updater";
 import { mockScanner } from "./mockScanner";
-import { mockCleaner } from "./mockCleaner";
+import { mockCleaner, mockQuarantine } from "./mockCleaner";
 import { mockBoost } from "./mockBoost";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
@@ -120,6 +120,8 @@ const real = {
   onDupesDone: (cb: (d: DupeDone) => void): Promise<UnlistenFn> => listen<DupeDone>("dupes://done", (e) => cb(e.payload)),
   /** ย้ายไฟล์ที่เลือกจากรายการ "old" หรือ "dupes" เข้าที่กักกัน — path ต้องอยู่ในผลสแกน */
   quarantine: (list: "old" | "dupes", paths: string[]) => invoke<CleanResult>("quarantine_listed", { list, paths }),
+  /** ย้ายโฟลเดอร์/ไฟล์ที่ผู้ใช้เลือกเองจากหน้า พื้นที่ดิสก์ เข้าที่กักกัน — path ต้องตรงกับผลสแกนล่าสุด */
+  removePaths: (paths: string[]) => invoke<CleanResult>("quarantine_scan_paths", { paths }),
   /** ประวัติการสแกนของ path นี้ + การเติบโตเทียบครั้งก่อน */
   history: (root: string) => invoke<History>("scan_history", { root }),
   /** เปิดใน Explorer (ไฟล์จะถูกเลือกให้) */
@@ -183,6 +185,10 @@ const cleanerReal = {
   files: (id: string, limit: number) => invoke<Preview>("cleaner_files", { id, limit }),
   /** ย้ายไฟล์ของหมวดที่เลือกเข้าที่กักกัน 7 วัน (ไม่ลบถาวร) */
   clean: (ids: string[]) => invoke<CleanResult>("cleaner_clean", { ids }),
+  /** จำหมวดที่ผู้ใช้ยืนยันไว้ก่อนขอสิทธิ์ผู้ดูแล (UAC ครั้งเดียว) แล้วเปิดแอปใหม่ */
+  setPending: (ids: string[]) => invoke<void>("cleaner_pending_set", { ids }),
+  /** หมวดที่ค้างไว้จากรอบที่เปิดใหม่แบบผู้ดูแล — อ่านแล้วลบทิ้งในตัว (คืน [] ถ้าไม่มีหรือหมดอายุ) */
+  takePending: () => invoke<string[]>("cleaner_pending_take"),
   onProgress: (cb: (p: CleanProgress) => void): Promise<UnlistenFn> => listen<CleanProgress>("cleaner://progress", (e) => cb(e.payload)),
   overview: () => invoke<SafetyOverview>("safety_overview"),
   restore: (eventId: number) => invoke<RestoreResult>("safety_restore", { eventId }),
@@ -245,7 +251,6 @@ export const systemInfo = (): Promise<SystemInfo> =>
 export type Settings = { retentionDays: number; dataDir: string; quarantineFiles: number; quarantineBytes: number };
 export type Purged = { files: number; bytes: number };
 
-let mockRetention = 7;
 const settingsReal = {
   get: () => invoke<Settings>("settings_get"),
   /** ตั้งจำนวนวันที่กักกัน (1–365) — ชุดที่เก่ากว่าค่าใหม่ถูกลบถาวรทันที */
@@ -254,14 +259,58 @@ const settingsReal = {
   purgeQuarantine: () => invoke<Purged>("quarantine_purge_all"),
 };
 const settingsMock: typeof settingsReal = {
-  get: async () => ({ retentionDays: mockRetention, dataDir: "C:\\Users\\demo\\AppData\\Local\\WeakClean", quarantineFiles: 0, quarantineBytes: 0 }),
+  get: async () => ({ retentionDays: mockQuarantine.retentionDays, dataDir: "C:\\Users\\demo\\AppData\\Local\\WeakClean", quarantineFiles: 0, quarantineBytes: 0 }),
   setRetention: async (days) => {
-    mockRetention = days;
+    mockQuarantine.retentionDays = days;
     return { files: 0, bytes: 0 };
   },
   purgeQuarantine: async () => ({ files: 0, bytes: 0 }),
 };
 export const settings: typeof settingsReal = isTauri() ? settingsReal : settingsMock;
+
+/* ───────── ตัวช่วยเบื้องหลัง — คู่กับ src-tauri/src/background.rs ───────── */
+
+export type BackgroundStatus = {
+  /** ลงทะเบียนเปิดพร้อม Windows อยู่ไหม */
+  autostart: boolean;
+  /** เปิดการเตือนอยู่ไหม */
+  remind: boolean;
+  /** รอบการเตือน (วัน) */
+  days: number;
+  /** เวลาของการล้างขยะครั้งล่าสุด (วินาทีตั้งแต่ 1970) — null ถ้ายังไม่เคยล้าง */
+  lastCleanTs: number | null;
+  /** เวลาที่จะเตือนครั้งถัดไป (วินาทีตั้งแต่ 1970) */
+  nextReminderTs: number;
+};
+
+const backgroundReal = {
+  status: () => invoke<BackgroundStatus>("background_status"),
+  setAutostart: (enabled: boolean) => invoke<void>("background_set_autostart", { enabled }),
+  setRemind: (enabled: boolean) => invoke<void>("background_set_remind", { enabled }),
+  /** ปุ่มลองในหน้าตั้งค่า: ขึ้นการ์ดเตือนเดี๋ยวนี้ แล้วเริ่มนับรอบใหม่ */
+  remindNow: () => invoke<void>("background_remind_now"),
+  /** ภาษาของเมนูในถาดระบบ */
+  setLang: (lang: string) => invoke<void>("background_lang", { lang }),
+  /** ผู้ใช้กด "ล้างตอนนี้" บนการ์ดเตือน: เปิดโปรแกรมไปหน้า ล้างขยะ */
+  cleanNow: () => invoke<void>("reminder_action", { action: "clean" }),
+  /** ปิดการ์ดเตือน (กด "ไว้ทีหลัง", กดกากบาท หรือปล่อยทิ้งไว้จนครบเวลา) */
+  dismiss: () => invoke<void>("reminder_action", { action: "later" }),
+  /** การ์ดเตือนสั่งให้เปิดหน้า ล้างขยะ */
+  onCleanRequested: (cb: () => void): Promise<UnlistenFn> => listen("reminder://clean", () => cb()),
+};
+
+const backgroundMock: typeof backgroundReal = {
+  status: async () => ({ autostart: false, remind: true, days: 7, lastCleanTs: null, nextReminderTs: Math.floor(Date.now() / 1000) + 7 * 86_400 }),
+  setAutostart: async () => {},
+  setRemind: async () => {},
+  remindNow: async () => {},
+  setLang: async () => {},
+  cleanNow: async () => {},
+  dismiss: async () => {},
+  onCleanRequested: async () => () => {},
+};
+
+export const background: typeof backgroundReal = isTauri() ? backgroundReal : backgroundMock;
 
 /* ───────── อัปเดตอัตโนมัติ — ดึงจาก GitHub เฉพาะตอนผู้ใช้กด "ตรวจหาอัปเดต" ───────── */
 

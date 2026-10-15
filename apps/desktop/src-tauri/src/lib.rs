@@ -7,6 +7,7 @@
 
 use serde::Serialize;
 
+mod background;
 mod boost_cmd;
 mod clean_cmd;
 mod extra_cmd;
@@ -33,6 +34,17 @@ fn app_info() -> AppInfo {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // เปิดซ้อน = ไม่เปิดโปรแกรมที่สอง แต่เรียกหน้าต่างของตัวที่เปิดอยู่ขึ้นมา
+    // (ไฟล์ล็อกถูกจองไว้จนโปรเซสจบ จึงไม่ต้องปลดเอง)
+    #[cfg(windows)]
+    match background::claim_single_instance(&clean_cmd::data_dir()) {
+        Some(lock) => std::mem::forget(lock),
+        None => {
+            background::focus_existing();
+            return;
+        }
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -42,7 +54,15 @@ pub fn run() {
             use tauri::Manager;
             let cleaner = clean_cmd::init()?;
             app.manage(boost_cmd::init(&cleaner)?);
+            // ไอคอนถาด + รอบเตือน ต้องมี state ของ cleaner ก่อนจึงส่งเข้าไปได้
+            background::setup(app.handle(), &cleaner)?;
             app.manage(cleaner);
+            // เปิดจาก Start Menu = โชว์หน้าต่าง ส่วนเปิดพร้อม Windows (--background) = อยู่ในถาดเงียบๆ
+            if !background::launched_in_background() {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.show();
+                }
+            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -62,6 +82,7 @@ pub fn run() {
             extra_cmd::dupes_cancel,
             extra_cmd::dupes_result,
             extra_cmd::quarantine_listed,
+            extra_cmd::quarantine_scan_paths,
             extra_cmd::scan_history,
             clean_cmd::cleaner_catalog,
             clean_cmd::cleaner_scan,
@@ -75,7 +96,15 @@ pub fn run() {
             boost_cmd::boost_revert_change,
             boost_cmd::boost_revert_event,
             boost_cmd::boost_relaunch_admin,
-            clean_cmd::safety_restore
+            clean_cmd::safety_restore,
+            clean_cmd::cleaner_pending_set,
+            clean_cmd::cleaner_pending_take,
+            background::background_status,
+            background::background_set_autostart,
+            background::background_set_remind,
+            background::background_remind_now,
+            background::background_lang,
+            background::reminder_action
         ])
         .run(tauri::generate_context!())
         .expect("error while running WeakClean");

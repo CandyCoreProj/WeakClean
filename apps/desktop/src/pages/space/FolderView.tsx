@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
-import { ArrowLeft, ArrowRight, ChevronRight, Cloud, ExternalLink, FileText, Folder, Layers, MousePointerClick, Sparkles } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { ArrowLeft, ArrowRight, ChevronRight, Cloud, ExternalLink, FileText, Folder, FolderOpen, Layers, MousePointerClick, Sparkles, Trash2 } from "lucide-react";
 import { Badge, type Tone } from "../../components/Badge";
-import { classify, joinPath, type Kind, type Label } from "../../lib/classify";
+import { ContextMenu, type MenuAction } from "../../components/ContextMenu";
+import { canDeleteHere, classify, joinPath, type Kind, type Label } from "../../lib/classify";
 import { formatBytes, scanner, type Children, type NodeView } from "../../lib/tauri";
 import { l, useI18n, type PageId } from "../../i18n";
+import { ConfirmDelete, type DeleteTarget } from "./DeleteDialog";
 import { Treemap, type TreeItem } from "./Treemap";
 
 const TINTS = ["#C3DBFF", "#BDEFDC", "#C6ECFB", "#DCD6FF", "#FFE0C9", "#FFD9E4", "#FFF3BF", "#D8F0A8"];
@@ -38,6 +40,8 @@ function useChildren(path: string[], key: string) {
   const cache = useRef(new Map<string, Children>());
   const [data, setData] = useState<{ k: string; value: Children } | null>(null);
   const [failed, setFailed] = useState(false);
+  /** เพิ่มขึ้นเมื่อต้องลืมแคช (หลังลบของออกจากดิสก์) เพื่อให้โหลดใหม่จากผลสแกนที่ฝั่ง Rust อัปเดตแล้ว */
+  const [version, setVersion] = useState(0);
 
   const keyOf = (p: string[]) => `${key}|${p.join("\\")}`;
 
@@ -57,7 +61,7 @@ function useChildren(path: string[], key: string) {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cacheKey]);
+  }, [cacheKey, version]);
 
   const cached = cache.current.get(cacheKey);
   return {
@@ -70,6 +74,11 @@ function useChildren(path: string[], key: string) {
       } catch {
         /* ไม่เป็นไร */
       }
+    },
+    /** ลืมทุกโฟลเดอร์ที่แคชไว้แล้วโหลดใหม่ — ยอดของโฟลเดอร์แม่เปลี่ยนไปหลังลบของออก */
+    reload: () => {
+      cache.current.clear();
+      setVersion((v) => v + 1);
     },
   };
 }
@@ -91,7 +100,11 @@ export function FolderView({ rootPath, scanKey, onNavigate, onShowTopFiles }: Pr
   const { lang, tr } = useI18n();
   const [path, setPath] = useState<string[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
-  const { value: data, failed, preload } = useChildren(path, scanKey);
+  /** เมนูคลิกขวาที่เปิดอยู่ (ตำแหน่งเคอร์เซอร์ + รายการที่คลิก) */
+  const [menu, setMenu] = useState<{ x: number; y: number; entry: Entry } | null>(null);
+  /** รายการที่กำลังรอผู้ใช้ยืนยันลบ */
+  const [pending, setPending] = useState<DeleteTarget | null>(null);
+  const { value: data, failed, preload, reload } = useChildren(path, scanKey);
   const num = (n: number) => n.toLocaleString(lang === "th" ? "th-TH" : "en-US");
 
   const entries = useMemo<Entry[]>(() => {
@@ -177,6 +190,43 @@ export function FolderView({ rootPath, scanKey, onNavigate, onShowTopFiles }: Pr
   const barMax = entries.length ? sizeOf(entries[0]) : 0;
   const ofWhat = path.length === 0 ? tr(l("ของที่ใช้ไป", "of used space")) : tr(l("ของโฟลเดอร์นี้", "of this folder"));
 
+  /** เป้าหมายการลบของรายการนี้ — ก้อนรวมลบไม่ได้ และโฟลเดอร์ที่ระบบใช้ (ป้าย "ห้ามลบ") ก็ลบไม่ได้ */
+  const deleteTarget = (e: Entry): DeleteTarget | null => (e.type === "dir" && canDeleteHere(dirPath(e)) ? { path: dirPath(e), name: e.node.name, size: e.node.size } : null);
+
+  const menuFor = (e: Entry): MenuAction[] => {
+    const target = deleteTarget(e);
+    const why =
+      e.type === "dir"
+        ? tr(l("เป็นโฟลเดอร์ที่ระบบใช้ ลบไม่ได้", "Windows relies on this folder, so it can't be deleted"))
+        : tr(l("ก้อนรวมของหลายรายการ · ลบทีละโฟลเดอร์ หรือใช้แท็บไฟล์ใหญ่สุด", "A group of many items · delete folders one by one, or use the Largest files tab"));
+    return [
+      ...(canOpen(e) ? [{ id: "open", label: tr(l("เปิดโฟลเดอร์", "Open folder")), icon: <FolderOpen size={16} strokeWidth={2} aria-hidden="true" />, onSelect: () => open(e.id) }] : []),
+      { id: "reveal", label: tr(l("เปิดใน File Explorer", "Show in File Explorer")), icon: <ExternalLink size={16} strokeWidth={2} aria-hidden="true" />, onSelect: () => void scanner.reveal(dirPath(e)).catch(() => {}) },
+      {
+        id: "delete",
+        label: tr(l("ลบ…", "Delete…")),
+        icon: <Trash2 size={16} strokeWidth={2} aria-hidden="true" />,
+        danger: true,
+        disabled: !target,
+        hint: target ? tr(l("ย้ายเข้าที่กักกัน · ไม่ได้ลบถาวร", "Moves to quarantine · not permanently deleted")) : why,
+        onSelect: () => target && setPending(target),
+      },
+    ];
+  };
+
+  /** คลิกขวา = เลือกรายการนั้นแล้วเปิดเมนูของแอป (ไม่ใช่เมนูของเบราว์เซอร์) */
+  const openMenu = (ev: ReactMouseEvent, entry: Entry) => {
+    ev.preventDefault();
+    setSelected(entry.id);
+    setMenu({ x: ev.clientX, y: ev.clientY, entry });
+  };
+
+  /** หลังย้ายเข้าที่กักกันจริง — เลือกรายการใหม่ แล้วโหลดรายการจากผลสแกนที่ฝั่ง Rust อัปเดตแล้ว */
+  const afterDelete = (target: DeleteTarget) => {
+    if (current && dirPath(current) === target.path) setSelected(null);
+    reload();
+  };
+
   if (failed) return <Notice text={tr(l("อ่านผลสแกนไม่ได้ ลองสแกนใหม่อีกครั้ง", "Couldn't read the scan result — try scanning again"))} />;
   if (!data) return <Notice text={tr(l("กำลังโหลด…", "Loading…"))} />;
 
@@ -214,7 +264,7 @@ export function FolderView({ rootPath, scanKey, onNavigate, onShowTopFiles }: Pr
         </nav>
         <span className="inline-flex items-center gap-1.5 text-[13px] text-muted">
           <MousePointerClick size={15} strokeWidth={2} aria-hidden="true" />
-          {tr(l("คลิก = ดูรายละเอียด · ดับเบิลคลิก = เปิดโฟลเดอร์", "Click = details · Double-click = open folder"))}
+          {tr(l("คลิก = ดูรายละเอียด · ดับเบิลคลิก = เปิดโฟลเดอร์ · คลิกขวา = ลบ", "Click = details · Double-click = open · Right-click = delete"))}
         </span>
       </div>
 
@@ -223,10 +273,25 @@ export function FolderView({ rootPath, scanKey, onNavigate, onShowTopFiles }: Pr
       ) : (
         <>
           <div className="grid grid-cols-[minmax(0,3fr)_minmax(300px,2fr)] gap-[18px]">
-            <Treemap items={treeItems} selected={treeSelected} onSelect={setSelected} onOpen={open} label={tr(l("แผนภาพ Treemap", "Treemap"))} />
+            <Treemap
+              items={treeItems}
+              selected={treeSelected}
+              onSelect={setSelected}
+              onOpen={open}
+              onMenu={(id, x, y) => {
+                const e = entries.find((v) => v.id === id);
+                if (e) setMenu({ x, y, entry: e });
+              }}
+              label={tr(l("แผนภาพ Treemap", "Treemap"))}
+            />
 
             {/* ───── การ์ดรายละเอียด ───── */}
-            <aside aria-label={tr(l("รายละเอียดที่เลือก", "Selected item"))} aria-live="polite" className="flex flex-col gap-4 rounded-card bg-surface p-6 shadow-card">
+            <aside
+              aria-label={tr(l("รายละเอียดที่เลือก", "Selected item"))}
+              aria-live="polite"
+              onContextMenu={current && !tailSelected ? (ev) => openMenu(ev, current) : undefined}
+              className="flex flex-col gap-4 rounded-card bg-surface p-6 shadow-card"
+            >
               {tailSelected ? (
                 <TailDetail
                   items={tail.map((e) => ({ id: e.id, title: titleOf(e), size: sizeOf(e), tint: e.tint }))}
@@ -268,7 +333,7 @@ export function FolderView({ rootPath, scanKey, onNavigate, onShowTopFiles }: Pr
               const isSel = current?.id === e.id && !tailSelected;
               const openable = canOpen(e);
               return (
-                <div key={e.id} className={`flex items-center border-t border-rowline transition-colors ${isSel ? "bg-sel" : "bg-surface hover:bg-app"}`}>
+                <div key={e.id} onContextMenu={(ev) => openMenu(ev, e)} className={`flex items-center border-t border-rowline transition-colors ${isSel ? "bg-sel" : "bg-surface hover:bg-app"}`}>
                   <button
                     type="button"
                     onClick={() => setSelected(e.id)}
@@ -308,6 +373,17 @@ export function FolderView({ rootPath, scanKey, onNavigate, onShowTopFiles }: Pr
           </section>
         </>
       )}
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={tr(l(`ตัวเลือกของ ${titleOf(menu.entry)}`, `Options for ${titleOf(menu.entry)}`))}
+          actions={menuFor(menu.entry)}
+          onClose={() => setMenu(null)}
+        />
+      )}
+      <ConfirmDelete target={pending} onClose={() => setPending(null)} onDone={afterDelete} />
     </div>
   );
 }

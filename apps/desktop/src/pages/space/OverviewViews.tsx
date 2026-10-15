@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Trash2 } from "lucide-react";
+import { ContextMenu, type MenuAction } from "../../components/ContextMenu";
 import { useSoon } from "../../components/Toast";
-import { formatBytes, scanner, type ExtStat, type Overview } from "../../lib/tauri";
+import { canDeleteHere } from "../../lib/classify";
+import { formatBytes, scanner, type ExtStat, type FileEntry, type Overview } from "../../lib/tauri";
 import { l, useI18n, type L } from "../../i18n";
+import { ConfirmDelete, type DeleteTarget } from "./DeleteDialog";
 
 function useOverview(scanKey: string) {
   const [data, setData] = useState<{ k: string; value: Overview } | null>(null);
@@ -95,21 +98,54 @@ export function TopFilesView({ scanKey }: { scanKey: string }) {
   const { tr } = useI18n();
   const soon = useSoon();
   const { value, failed } = useOverview(scanKey);
+  /** เมนูคลิกขวาที่เปิดอยู่ (ตำแหน่งเคอร์เซอร์ + ไฟล์ที่คลิก) */
+  const [menu, setMenu] = useState<{ x: number; y: number; file: FileEntry } | null>(null);
+  /** ไฟล์ที่กำลังรอผู้ใช้ยืนยันลบ */
+  const [pending, setPending] = useState<DeleteTarget | null>(null);
+  /** ไฟล์ที่เพิ่งลบไปแล้ว — เอาออกจากลิสต์ทันที ไม่ต้องรอสแกนใหม่ */
+  const [removed, setRemoved] = useState<Set<string>>(new Set());
 
   if (failed) return <Box>{tr(l("อ่านผลสแกนไม่ได้ ลองสแกนใหม่อีกครั้ง", "Couldn't read the scan result — try scanning again"))}</Box>;
   if (!value) return <Box>{tr(l("กำลังโหลด…", "Loading…"))}</Box>;
 
+  const files = value.topFiles.filter((f) => !removed.has(f.path));
+  const nameOf = (p: string) => p.slice(p.lastIndexOf("\\") + 1);
+
+  const menuFor = (f: FileEntry): MenuAction[] => {
+    const allowed = canDeleteHere(f.path);
+    return [
+      { id: "reveal", label: tr(l("เปิดใน File Explorer", "Show in File Explorer")), icon: <ExternalLink size={16} strokeWidth={2} aria-hidden="true" />, onSelect: () => void scanner.reveal(f.path).catch(soon) },
+      {
+        id: "delete",
+        label: tr(l("ลบ…", "Delete…")),
+        icon: <Trash2 size={16} strokeWidth={2} aria-hidden="true" />,
+        danger: true,
+        disabled: !allowed,
+        hint: allowed ? tr(l("ย้ายเข้าที่กักกัน · ไม่ได้ลบถาวร", "Moves to quarantine · not permanently deleted")) : tr(l("ไฟล์ของระบบที่ลบไม่ได้", "A system file that can't be deleted")),
+        onSelect: () => setPending({ path: f.path, name: nameOf(f.path), size: f.size }),
+      },
+    ];
+  };
+
   return (
     <section aria-label={tr(l("ไฟล์ใหญ่สุด", "Largest files"))} className="flex flex-col overflow-hidden rounded-card bg-surface shadow-card">
       <div className="px-[22px] pt-[18px] pb-2.5">
-        <h2 className="m-0 font-display text-lg font-medium">{tr(l(`ไฟล์ใหญ่สุด ${value.topFiles.length} อันดับ`, `Top ${value.topFiles.length} largest files`))}</h2>
+        <h2 className="m-0 font-display text-lg font-medium">{tr(l(`ไฟล์ใหญ่สุด ${files.length} อันดับ`, `Top ${files.length} largest files`))}</h2>
+        <span className="text-[13px] text-muted">{tr(l("คลิกขวาเพื่อลบทีละไฟล์ · ของจะถูกย้ายเข้าที่กักกันก่อนเสมอ", "Right-click a file to delete it · it always moves to quarantine first"))}</span>
       </div>
-      {value.topFiles.map((f) => {
+      {files.map((f) => {
         const cut = f.path.lastIndexOf("\\");
         const name = f.path.slice(cut + 1);
         const dir = f.path.slice(0, cut + 1);
         return (
-          <div key={f.path} className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_96px_44px] items-center gap-4 border-t border-rowline px-[22px] py-1.5">
+          <div
+            key={f.path}
+            onContextMenu={(ev) => {
+              ev.preventDefault();
+              setMenu({ x: ev.clientX, y: ev.clientY, file: f });
+            }}
+            className="grid min-h-[56px] grid-cols-[minmax(0,1fr)_96px_44px] items-center gap-4 border-t border-rowline px-[22px] py-1.5"
+          >
             <span className="flex min-w-0 flex-col">
               <span className="truncate text-[15px] font-medium">{name}</span>
               <span className="truncate text-xs text-muted" title={f.path}>{dir}</span>
@@ -126,6 +162,21 @@ export function TopFilesView({ scanKey }: { scanKey: string }) {
           </div>
         );
       })}
+
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          label={tr(l(`ตัวเลือกของ ${nameOf(menu.file.path)}`, `Options for ${nameOf(menu.file.path)}`))}
+          actions={menuFor(menu.file)}
+          onClose={() => setMenu(null)}
+        />
+      )}
+      <ConfirmDelete
+        target={pending}
+        onClose={() => setPending(null)}
+        onDone={(target) => setRemoved((cur) => new Set(cur).add(target.path))}
+      />
     </section>
   );
 }
