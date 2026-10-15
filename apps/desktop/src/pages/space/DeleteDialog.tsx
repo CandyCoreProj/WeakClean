@@ -71,7 +71,7 @@ export function ConfirmDelete({ target, onClose, onDone }: Props) {
           type="button"
           disabled={busy}
           onClick={() => void run()}
-          className="inline-flex min-h-[50px] items-center gap-2 rounded-full bg-danger-fg px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
+          className="inline-flex min-h-[50px] items-center gap-2 rounded-full bg-danger-solid px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110 disabled:opacity-60"
         >
           {busy ? <LoaderCircle size={17} strokeWidth={2.2} className="animate-spin" aria-hidden="true" /> : <Trash2 size={17} strokeWidth={2.1} aria-hidden="true" />}
           {tr(l("ลบ (ย้ายเข้าที่กักกัน)", "Delete (move to quarantine)"))}

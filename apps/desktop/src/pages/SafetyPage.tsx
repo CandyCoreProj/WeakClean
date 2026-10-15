@@ -195,7 +195,7 @@ export function SafetyPage() {
             type="button"
             disabled={!restorable || busy !== null}
             onClick={() => setConfirmAll(true)}
-            className="inline-flex min-h-[52px] shrink-0 items-center gap-2 rounded-full bg-white px-[22px] text-[15px] font-semibold text-danger-fg shadow-float transition hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex min-h-[52px] shrink-0 items-center gap-2 rounded-full bg-white px-[22px] text-[15px] font-semibold text-danger-deep shadow-float transition hover:brightness-105 disabled:cursor-not-allowed disabled:bg-white/20 disabled:text-white/85 disabled:shadow-none disabled:hover:brightness-100"
           >
             <Undo2 size={18} strokeWidth={2.2} aria-hidden="true" />
             {tr(l("คืนค่าทุกอย่างที่ WeakClean เคยทำ", "Undo everything WeakClean has done"))}
@@ -389,7 +389,7 @@ export function SafetyPage() {
           <button type="button" onClick={() => setConfirmAll(false)} className="min-h-[50px] rounded-full border border-edge bg-surface px-6 text-[15px] transition-colors hover:bg-hover">
             {t.cancel}
           </button>
-          <button type="button" onClick={() => void undoAll()} className="min-h-[50px] rounded-full bg-danger-fg px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
+          <button type="button" onClick={() => void undoAll()} className="min-h-[50px] rounded-full bg-danger-solid px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
             {tr(l("คืนค่าทั้งหมด", "Undo everything"))}
           </button>
         </div>
@@ -406,7 +406,7 @@ export function SafetyPage() {
           <button type="button" onClick={() => setPendingDays(null)} className="min-h-[50px] rounded-full border border-edge bg-surface px-6 text-[15px] transition-colors hover:bg-hover">
             {t.cancel}
           </button>
-          <button type="button" onClick={() => pendingDays && void changeRetention(pendingDays)} className="min-h-[50px] rounded-full bg-danger-fg px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
+          <button type="button" onClick={() => pendingDays && void changeRetention(pendingDays)} className="min-h-[50px] rounded-full bg-danger-solid px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
             {tr(l("ลดและลบส่วนที่เก่ากว่า", "Reduce and delete older files"))}
           </button>
         </div>
@@ -423,7 +423,7 @@ export function SafetyPage() {
           <button type="button" onClick={() => setPurgeOpen(false)} className="min-h-[50px] rounded-full border border-edge bg-surface px-6 text-[15px] transition-colors hover:bg-hover">
             {t.cancel}
           </button>
-          <button type="button" onClick={() => void emptyQuarantine()} className="min-h-[50px] rounded-full bg-danger-fg px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
+          <button type="button" onClick={() => void emptyQuarantine()} className="min-h-[50px] rounded-full bg-danger-solid px-[26px] text-[15px] font-semibold text-white transition hover:brightness-110">
             {tr(l("ลบถาวร", "Delete permanently"))}
           </button>
         </div>

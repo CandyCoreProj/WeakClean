@@ -23,7 +23,7 @@ export function SettingsPage() {
     | { s: "latest" }
     | { s: "available"; info: UpdateInfo }
     | { s: "downloading"; info: UpdateInfo; done: number; total: number | null }
-    | { s: "error"; message: string }
+    | { s: "error"; message: string; during: "check" | "install" }
   >({ s: "idle" });
 
   const checkForUpdate = async () => {
@@ -32,7 +32,7 @@ export function SettingsPage() {
       const info = await updater.check();
       setUpd(info ? { s: "available", info } : { s: "latest" });
     } catch (e) {
-      setUpd({ s: "error", message: String(e) });
+      setUpd({ s: "error", message: String(e), during: "check" });
     }
   };
   const installUpdate = async (info: UpdateInfo) => {
@@ -40,7 +40,7 @@ export function SettingsPage() {
     try {
       await updater.install((done, total) => setUpd({ s: "downloading", info, done, total }));
     } catch (e) {
-      setUpd({ s: "error", message: String(e) });
+      setUpd({ s: "error", message: String(e), during: "install" });
     }
   };
 
@@ -179,7 +179,9 @@ export function SettingsPage() {
                 : upd.s === "available" || upd.s === "downloading"
                   ? tr(l(`มีเวอร์ชันใหม่ ${upd.info.version}${upd.info.notes ? ` — ${upd.info.notes.slice(0, 200)}` : ""}`, `Version ${upd.info.version} is available${upd.info.notes ? ` — ${upd.info.notes.slice(0, 200)}` : ""}`))
                   : upd.s === "error"
-                    ? tr(l(`ตรวจอัปเดตไม่สำเร็จ: ${upd.message}`, `Couldn't check for updates: ${upd.message}`))
+                    ? upd.during === "install"
+                      ? tr(l(`ติดตั้งอัปเดตไม่สำเร็จ: ${upd.message}`, `Couldn't install the update: ${upd.message}`))
+                      : tr(l(`ตรวจอัปเดตไม่สำเร็จ: ${upd.message}`, `Couldn't check for updates: ${upd.message}`))
                     : tr(l("ตรวจเมื่อคุณกดเท่านั้น — แอปไม่ตรวจเองและไม่ติดตั้งอะไรโดยไม่ถามก่อน อัปเดตทุกชุดตรวจลายเซ็นก่อนติดตั้ง", "Checks only when you press the button — the app never checks by itself or installs anything without asking, and every update's signature is verified first"))
             }
           >

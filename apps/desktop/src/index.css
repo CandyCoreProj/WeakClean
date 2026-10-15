@@ -26,6 +26,11 @@
   --color-warn-fg: #8a5300;
   --color-danger-bg: #ffe3e3;
   --color-danger-fg: #b4232a;
+  --color-danger-solid: #c42b33;   /* พื้นปุ่มแดงทึบ ตัวอักษรขาว */
+  --color-danger-deep: #b4232a;    /* ตัวอักษรแดงบนปุ่มขาว (ไม่เปลี่ยนตามธีม) */
+  --color-brand-deep: #1a5ce0;     /* ตัวอักษรน้ำเงินบนปุ่มขาว (ไม่เปลี่ยนตามธีม) */
+  --color-toast: #2b3a67;
+  --color-toast-fg: #ffffff;
   --color-info-bg: #e8eef8;
   --color-info-fg: #3a4870;
 
@@ -181,6 +186,9 @@ input {
   --color-warn-fg: #ffc36b;
   --color-danger-bg: #3f1b20;
   --color-danger-fg: #ff8a8f;
+  --color-danger-solid: #cf3a43;
+  --color-toast: #2f4575;
+  --color-toast-fg: #f4f7ff;
   --color-info-bg: #22304d;
   --color-info-fg: #b7c5e6;
 

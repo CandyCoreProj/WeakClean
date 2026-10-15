@@ -18,7 +18,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     <ToastContext.Provider value={show}>
       {children}
       <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-6 z-50 flex justify-center px-6">
-        {msg && <div className="rounded-full bg-ink px-5 py-3 text-sm text-white shadow-float">{msg}</div>}
+        {msg && <div className="rounded-full border border-white/10 bg-toast px-5 py-3 text-sm font-medium text-toast-fg shadow-float">{msg}</div>}
       </div>
     </ToastContext.Provider>
   );

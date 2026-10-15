@@ -67,7 +67,7 @@ export function SpacePage({ onNavigate }: { onNavigate?: (id: PageId) => void })
             <button
               type="button"
               onClick={cancelScan}
-              className="inline-flex min-h-[52px] shrink-0 items-center gap-2 rounded-full bg-white px-[26px] text-base font-semibold text-danger-fg shadow-float transition hover:brightness-105"
+              className="inline-flex min-h-[52px] shrink-0 items-center gap-2 rounded-full bg-white px-[26px] text-base font-semibold text-danger-deep shadow-float transition hover:brightness-105"
             >
               <X size={18} strokeWidth={2.2} aria-hidden="true" />
               {tr(l("ยกเลิกการสแกน", "Cancel scan"))}
@@ -77,7 +77,7 @@ export function SpacePage({ onNavigate }: { onNavigate?: (id: PageId) => void })
               type="button"
               disabled={!selected}
               onClick={() => selected && void startScan(selected)}
-              className="inline-flex min-h-[52px] shrink-0 items-center gap-2 rounded-full bg-white px-[26px] text-base font-semibold text-brand shadow-float transition hover:brightness-105 disabled:opacity-60"
+              className="inline-flex min-h-[52px] shrink-0 items-center gap-2 rounded-full bg-white px-[26px] text-base font-semibold text-brand-deep shadow-float transition hover:brightness-105 disabled:opacity-60"
             >
               <RotateCw size={18} strokeWidth={2.2} aria-hidden="true" />
               {hasResult ? tr(l("สแกนใหม่", "Scan again")) : tr(l("สแกนเลย", "Scan now"))}
@@ -105,7 +105,7 @@ export function SpacePage({ onNavigate }: { onNavigate?: (id: PageId) => void })
             );
           })}
           {customRoot && (
-            <button type="button" aria-pressed="true" className="inline-flex min-h-11 max-w-[320px] items-center gap-2 rounded-full bg-white px-[18px] text-sm font-semibold text-brand shadow-[0_8px_18px_rgba(10,50,140,0.2)]">
+            <button type="button" aria-pressed="true" className="inline-flex min-h-11 max-w-[320px] items-center gap-2 rounded-full bg-white px-[18px] text-sm font-semibold text-brand-deep shadow-[0_8px_18px_rgba(10,50,140,0.2)]">
               <FolderSearch size={18} strokeWidth={1.9} aria-hidden="true" />
               <span className="truncate">{customRoot}</span>
             </button>

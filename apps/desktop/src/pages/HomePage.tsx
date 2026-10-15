@@ -160,7 +160,7 @@ export function HomePage({ onNavigate }: { onNavigate: (id: PageId) => void }) {
           <button
             type="button"
             onClick={() => onNavigate(cleanReady && cleanBytes >= 512 * 1024 * 1024 ? "cleaner" : unapplied > 0 ? "boost" : "space")}
-            className="inline-flex min-h-[52px] items-center gap-2 rounded-full bg-white px-[26px] text-base font-semibold text-brand shadow-float transition hover:brightness-105"
+            className="inline-flex min-h-[52px] items-center gap-2 rounded-full bg-white px-[26px] text-base font-semibold text-brand-deep shadow-float transition hover:brightness-105"
           >
             <Sparkles size={18} strokeWidth={2.2} aria-hidden="true" />
             {tr(l("ดูแลเครื่องตอนนี้", "Take care of my PC"))}
